@@ -1,0 +1,178 @@
+{
+  "1": {
+    "left": {
+      "outer": "data/01/SparseAtlas_01_lh.OuterSurf.vtk",
+      "middle": "data/01/SparseAtlas_01_lh.MiddleSurf.vtk",
+      "inner": "data/01/SparseAtlas_01_lh.InnerSurf.vtk",
+      "inflated": "data/01/SparseAtlas_01_lh.InflateSurf.vtk",
+      "sphere": "data/01/SparseAtlas_01_lh.SphereSurf.vtk"
+    },
+    "right": {
+      "outer": "data/01/SparseAtlas_01_rh.OuterSurf.vtk",
+      "middle": "data/01/SparseAtlas_01_rh.MiddleSurf.vtk",
+      "inner": "data/01/SparseAtlas_01_rh.InnerSurf.vtk",
+      "inflated": "data/01/SparseAtlas_01_rh.InflateSurf.vtk",
+      "sphere": "data/01/SparseAtlas_01_rh.SphereSurf.vtk"
+    }
+  },
+  "3": {
+    "left": {
+      "outer": "data/03/SparseAtlas_03_lh.OuterSurf.vtk",
+      "middle": "data/03/SparseAtlas_03_lh.MiddleSurf.vtk",
+      "inner": "data/03/SparseAtlas_03_lh.InnerSurf.vtk",
+      "inflated": "data/03/SparseAtlas_03_lh.InflateSurf.vtk",
+      "sphere": "data/03/SparseAtlas_03_lh.SphereSurf.vtk"
+    },
+    "right": {
+      "outer": "data/03/SparseAtlas_03_rh.OuterSurf.vtk",
+      "middle": "data/03/SparseAtlas_03_rh.MiddleSurf.vtk",
+      "inner": "data/03/SparseAtlas_03_rh.InnerSurf.vtk",
+      "inflated": "data/03/SparseAtlas_03_rh.InflateSurf.vtk",
+      "sphere": "data/03/SparseAtlas_03_rh.SphereSurf.vtk"
+    }
+  },
+  "6": {
+    "left": {
+      "outer": "data/06/SparseAtlas_06_lh.OuterSurf.vtk",
+      "middle": "data/06/SparseAtlas_06_lh.MiddleSurf.vtk",
+      "inner": "data/06/SparseAtlas_06_lh.InnerSurf.vtk",
+      "inflated": "data/06/SparseAtlas_06_lh.InflateSurf.vtk",
+      "sphere": "data/06/SparseAtlas_06_lh.SphereSurf.vtk"
+    },
+    "right": {
+      "outer": "data/06/SparseAtlas_06_rh.OuterSurf.vtk",
+      "middle": "data/06/SparseAtlas_06_rh.MiddleSurf.vtk",
+      "inner": "data/06/SparseAtlas_06_rh.InnerSurf.vtk",
+      "inflated": "data/06/SparseAtlas_06_rh.InflateSurf.vtk",
+      "sphere": "data/06/SparseAtlas_06_rh.SphereSurf.vtk"
+    }
+  },
+  "9": {
+    "left": {
+      "outer": "data/09/SparseAtlas_09_lh.OuterSurf.vtk",
+      "middle": "data/09/SparseAtlas_09_lh.MiddleSurf.vtk",
+      "inner": "data/09/SparseAtlas_09_lh.InnerSurf.vtk",
+      "inflated": "data/09/SparseAtlas_09_lh.InflateSurf.vtk",
+      "sphere": "data/09/SparseAtlas_09_lh.SphereSurf.vtk"
+    },
+    "right": {
+      "outer": "data/09/SparseAtlas_09_rh.OuterSurf.vtk",
+      "middle": "data/09/SparseAtlas_09_rh.MiddleSurf.vtk",
+      "inner": "data/09/SparseAtlas_09_rh.InnerSurf.vtk",
+      "inflated": "data/09/SparseAtlas_09_rh.InflateSurf.vtk",
+      "sphere": "data/09/SparseAtlas_09_rh.SphereSurf.vtk"
+    }
+  },
+  "12": {
+    "left": {
+      "outer": "data/12/SparseAtlas_12_lh.OuterSurf.vtk",
+      "middle": "data/12/SparseAtlas_12_lh.MiddleSurf.vtk",
+      "inner": "data/12/SparseAtlas_12_lh.InnerSurf.vtk",
+      "inflated": "data/12/SparseAtlas_12_lh.InflateSurf.vtk",
+      "sphere": "data/12/SparseAtlas_12_lh.SphereSurf.vtk"
+    },
+    "right": {
+      "outer": "data/12/SparseAtlas_12_rh.OuterSurf.vtk",
+      "middle": "data/12/SparseAtlas_12_rh.MiddleSurf.vtk",
+      "inner": "data/12/SparseAtlas_12_rh.InnerSurf.vtk",
+      "inflated": "data/12/SparseAtlas_12_rh.InflateSurf.vtk",
+      "sphere": "data/12/SparseAtlas_12_rh.SphereSurf.vtk"
+    }
+  },
+  "18": {
+    "left": {
+      "outer": "data/18/SparseAtlas_18_lh.OuterSurf.vtk",
+      "middle": "data/18/SparseAtlas_18_lh.MiddleSurf.vtk",
+      "inner": "data/18/SparseAtlas_18_lh.InnerSurf.vtk",
+      "inflated": "data/18/SparseAtlas_18_lh.InflateSurf.vtk",
+      "sphere": "data/18/SparseAtlas_18_lh.SphereSurf.vtk"
+    },
+    "right": {
+      "outer": "data/18/SparseAtlas_18_rh.OuterSurf.vtk",
+      "middle": "data/18/SparseAtlas_18_rh.MiddleSurf.vtk",
+      "inner": "data/18/SparseAtlas_18_rh.InnerSurf.vtk",
+      "inflated": "data/18/SparseAtlas_18_rh.InflateSurf.vtk",
+      "sphere": "data/18/SparseAtlas_18_rh.SphereSurf.vtk"
+    }
+  },
+  "24": {
+    "left": {
+      "outer": "data/24/SparseAtlas_24_lh.OuterSurf.vtk",
+      "middle": "data/24/SparseAtlas_24_lh.MiddleSurf.vtk",
+      "inner": "data/24/SparseAtlas_24_lh.InnerSurf.vtk",
+      "inflated": "data/24/SparseAtlas_24_lh.InflateSurf.vtk",
+      "sphere": "data/24/SparseAtlas_24_lh.SphereSurf.vtk"
+    },
+    "right": {
+      "outer": "data/24/SparseAtlas_24_rh.OuterSurf.vtk",
+      "middle": "data/24/SparseAtlas_24_rh.MiddleSurf.vtk",
+      "inner": "data/24/SparseAtlas_24_rh.InnerSurf.vtk",
+      "inflated": "data/24/SparseAtlas_24_rh.InflateSurf.vtk",
+      "sphere": "data/24/SparseAtlas_24_rh.SphereSurf.vtk"
+    }
+  },
+  "36": {
+    "left": {
+      "outer": "data/36/SparseAtlas_36_lh.OuterSurf.vtk",
+      "middle": "data/36/SparseAtlas_36_lh.MiddleSurf.vtk",
+      "inner": "data/36/SparseAtlas_36_lh.InnerSurf.vtk",
+      "inflated": "data/36/SparseAtlas_36_lh.InflateSurf.vtk",
+      "sphere": "data/36/SparseAtlas_36_lh.SphereSurf.vtk"
+    },
+    "right": {
+      "outer": "data/36/SparseAtlas_36_rh.OuterSurf.vtk",
+      "middle": "data/36/SparseAtlas_36_rh.MiddleSurf.vtk",
+      "inner": "data/36/SparseAtlas_36_rh.InnerSurf.vtk",
+      "inflated": "data/36/SparseAtlas_36_rh.InflateSurf.vtk",
+      "sphere": "data/36/SparseAtlas_36_rh.SphereSurf.vtk"
+    }
+  },
+  "48": {
+    "left": {
+      "outer": "data/48/SparseAtlas_48_lh.OuterSurf.vtk",
+      "middle": "data/48/SparseAtlas_48_lh.MiddleSurf.vtk",
+      "inner": "data/48/SparseAtlas_48_lh.InnerSurf.vtk",
+      "inflated": "data/48/SparseAtlas_48_lh.InflateSurf.vtk",
+      "sphere": "data/48/SparseAtlas_48_lh.SphereSurf.vtk"
+    },
+    "right": {
+      "outer": "data/48/SparseAtlas_48_rh.OuterSurf.vtk",
+      "middle": "data/48/SparseAtlas_48_rh.MiddleSurf.vtk",
+      "inner": "data/48/SparseAtlas_48_rh.InnerSurf.vtk",
+      "inflated": "data/48/SparseAtlas_48_rh.InflateSurf.vtk",
+      "sphere": "data/48/SparseAtlas_48_rh.SphereSurf.vtk"
+    }
+  },
+  "60": {
+    "left": {
+      "outer": "data/60/SparseAtlas_60_lh.OuterSurf.vtk",
+      "middle": "data/60/SparseAtlas_60_lh.MiddleSurf.vtk",
+      "inner": "data/60/SparseAtlas_60_lh.InnerSurf.vtk",
+      "inflated": "data/60/SparseAtlas_60_lh.InflateSurf.vtk",
+      "sphere": "data/60/SparseAtlas_60_lh.SphereSurf.vtk"
+    },
+    "right": {
+      "outer": "data/60/SparseAtlas_60_rh.OuterSurf.vtk",
+      "middle": "data/60/SparseAtlas_60_rh.MiddleSurf.vtk",
+      "inner": "data/60/SparseAtlas_60_rh.InnerSurf.vtk",
+      "inflated": "data/60/SparseAtlas_60_rh.InflateSurf.vtk",
+      "sphere": "data/60/SparseAtlas_60_rh.SphereSurf.vtk"
+    }
+  },
+  "72": {
+    "left": {
+      "outer": "data/72/SparseAtlas_72_lh.OuterSurf.vtk",
+      "middle": "data/72/SparseAtlas_72_lh.MiddleSurf.vtk",
+      "inner": "data/72/SparseAtlas_72_lh.InnerSurf.vtk",
+      "inflated": "data/72/SparseAtlas_72_lh.InflateSurf.vtk",
+      "sphere": "data/72/SparseAtlas_72_lh.SphereSurf.vtk"
+    },
+    "right": {
+      "outer": "data/72/SparseAtlas_72_rh.OuterSurf.vtk",
+      "middle": "data/72/SparseAtlas_72_rh.MiddleSurf.vtk",
+      "inner": "data/72/SparseAtlas_72_rh.InnerSurf.vtk",
+      "inflated": "data/72/SparseAtlas_72_rh.InflateSurf.vtk",
+      "sphere": "data/72/SparseAtlas_72_rh.SphereSurf.vtk"
+    }
+  }
+}
