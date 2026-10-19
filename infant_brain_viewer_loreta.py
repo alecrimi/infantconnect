@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import traceback
 import sys
 import zipfile
 import re
@@ -45,6 +46,10 @@ TEMPLATE_URL = (
 SCALP_ZIP_CANDIDATES = (
     "bem/outer_skin.surf", "bem/outer_skin_large.surf", "bem/head.surf",
 )
+SKULL_ZIP_CANDIDATES = (
+    "bem/inner_skull.surf", "bem/inner_skull_large.surf",
+    "bem/outer_skull.surf", "bem/outer_skull_large.surf",
+)
 MONTAGE_FIF_CANDIDATES = ("montages/10-20-montage.fif",)
 MONTAGE_SURF_CANDIDATES = ("surf/10-20-montage.surf",)
 MONTAGE_ALL_CANDIDATES = MONTAGE_FIF_CANDIDATES + MONTAGE_SURF_CANDIDATES
@@ -85,7 +90,10 @@ def fetch_scalp_and_montage(template_name, subjects_dir):
 
     has_scalp = any((subject_dir / s).is_file() for s in SCALP_ZIP_CANDIDATES)
     has_montage = any((subject_dir / s).is_file() for s in MONTAGE_ALL_CANDIDATES)
-    if has_scalp and has_montage:
+    has_inner = any((subject_dir / s).is_file() for s in SKULL_ZIP_CANDIDATES if "inner" in s)
+    has_outer = any((subject_dir / s).is_file() for s in SKULL_ZIP_CANDIDATES if "outer" in s and "skin" not in s)
+    
+    if has_scalp and has_montage and has_inner and has_outer:
         return subject_dir
 
     zip_path = Path(subjects_dir) / f"{subject}.zip"
@@ -97,10 +105,10 @@ def fetch_scalp_and_montage(template_name, subjects_dir):
             path=str(subjects_dir), progressbar=True,
         )
 
-    print(f"[{template_name}] extracting scalp + montage ...")
+    print(f"[{template_name}] extracting scalp, skulls, + montage ...")
     extracted = []
     with zipfile.ZipFile(zip_path) as zf:
-        for suffix in SCALP_ZIP_CANDIDATES + MONTAGE_ALL_CANDIDATES:
+        for suffix in SCALP_ZIP_CANDIDATES + SKULL_ZIP_CANDIDATES + MONTAGE_ALL_CANDIDATES:
             entry = _find_zip_entry(zf, suffix)
             if entry is None:
                 continue
@@ -109,6 +117,12 @@ def fetch_scalp_and_montage(template_name, subjects_dir):
             with zf.open(entry) as src, open(dest, "wb") as dst:
                 dst.write(src.read())
             extracted.append(suffix)
+
+    for base in ["inner_skull", "outer_skull", "outer_skin"]:
+        large = subject_dir / "bem" / f"{base}_large.surf"
+        standard = subject_dir / "bem" / f"{base}.surf"
+        if large.is_file() and not standard.is_file():
+            large.rename(standard)
 
     if not any((subject_dir / s).is_file() for s in SCALP_ZIP_CANDIDATES):
         raise FileNotFoundError(f"No scalp surface in {zip_path.name}")
@@ -171,7 +185,6 @@ def load_mne_infant_scalp(template_name):
         idx = scalp.find_closest_point(p_mm)
         electrode_positions[name] = np.asarray(scalp.points[idx], dtype=float)
 
-    # EXTRACT FIDUCIALS TO IMPROVE ACCURACY
     fiducials = {}
     fid_path = subject_dir / "surf" / "fiducials.surf"
     if fid_path.is_file():
@@ -187,7 +200,6 @@ def load_mne_infant_scalp(template_name):
             pass
             
     if not fiducials:
-        # Fallback heuristic if fiducials.surf is missing
         fiducials = {
             'nasion': scalp.points[np.argmax(scalp.points[:, 1])] / 1000.0,
             'lpa': scalp.points[np.argmin(scalp.points[:, 0])] / 1000.0,
@@ -205,8 +217,11 @@ def fit_template_to_brain(scalp, electrode_positions, reference_mesh,
     b = np.asarray(reference_mesh.bounds)
     b_lo, b_hi = b[[0, 2, 4]], b[[1, 3, 5]]
 
-    sx = margin[0] * (b_hi[0] - b_lo[0]) / (e_hi[0] - e_lo[0])
-    sy = margin[1] * (b_hi[1] - b_lo[1]) / (e_hi[1] - e_lo[1])
+    ex = max(e_hi[0] - e_lo[0], 1e-6)
+    ey = max(e_hi[1] - e_lo[1], 1e-6)
+
+    sx = margin[0] * (b_hi[0] - b_lo[0]) / ex
+    sy = margin[1] * (b_hi[1] - b_lo[1]) / ey
     scale = np.array([sx, sy, 0.5 * (sx + sy)])
 
     src = np.array([(e_lo[0] + e_hi[0]) / 2, (e_lo[1] + e_hi[1]) / 2, e_hi[2]])
@@ -233,10 +248,10 @@ def fit_tracts_to_brain(tracts, reference_mesh, margin=0.95):
 
     t = np.asarray(tracts.bounds)
     t_lo, t_hi = t[[0, 2, 4]], t[[1, 3, 5]]
-    t_size = t_hi - t_lo
+    t_size = np.maximum(t_hi - t_lo, 1e-6)
     t_center = (t_lo + t_hi) / 2
 
-    scale = np.where(t_size > 0, (b_size / t_size) * margin, 1.0)
+    scale = (b_size / t_size) * margin
 
     tracts.points = (tracts.points - t_center) * scale + b_center
     return tracts
@@ -273,6 +288,7 @@ class InfantBrainViewer(QMainWindow):
         self.tract_load_errors = {}
         
         self.loreta_data = None
+        self.connectome_data = None
         self.loreta_file = None
 
         self.anim_timer = QTimer(self)
@@ -347,6 +363,10 @@ class InfantBrainViewer(QMainWindow):
         self.loreta_checkbox.setChecked(False)
         controls.addWidget(self.loreta_checkbox)
 
+        self.connectome_checkbox = QCheckBox("Show Connectome")
+        self.connectome_checkbox.setChecked(False)
+        controls.addWidget(self.connectome_checkbox)
+
         self.plotter = QtInteractor(central)
         self.plotter.set_background("#202833")
         layout.addWidget(self.plotter.interactor, stretch=1)
@@ -361,6 +381,7 @@ class InfantBrainViewer(QMainWindow):
         self.tracts_checkbox.toggled.connect(self.update_view)
         self.animate_checkbox.toggled.connect(self.update_view)
         self.loreta_checkbox.toggled.connect(self.on_loreta_toggled)
+        self.connectome_checkbox.toggled.connect(self.update_view)
 
     def _nearest_age(self, requested_age):
         return min(self.available_ages, key=lambda a: abs(a - requested_age))
@@ -490,7 +511,7 @@ class InfantBrainViewer(QMainWindow):
 
         sphere = pv.Sphere(radius=1.0, theta_resolution=64, phi_resolution=64)
         dist = np.linalg.norm(sphere.points, axis=1)
-        dist_norm = dist / np.max(dist)
+        dist_norm = dist / np.maximum(np.max(dist), 1e-6)
         glow_vals = np.exp(- (dist_norm * 3.0) ** 2)
         sphere["glow"] = glow_vals
 
@@ -594,125 +615,261 @@ class InfantBrainViewer(QMainWindow):
     def on_loreta_toggled(self, checked):
         if not checked:
             self.loreta_data = None
+            self.connectome_data = None
             self.loreta_file = None
             self.update_view()
             return
 
         file_path, _ = QFileDialog.getOpenFileName(
-            self, 
-            "Select EEG File", 
+            self,
+            "Select EEG File",
             str(Path.home()),
             "EDF Files (*.edf);;All Files (*)",
-            options=QFileDialog.Option.DontUseNativeDialog
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
-        
+
         if not file_path:
             self.loreta_checkbox.setChecked(False)
             return
 
         self.loreta_file = file_path
-        progress = QProgressDialog("Running LORETA...", "Cancel", 0, 4, self)
+        progress = QProgressDialog("Running LORETA...", "Cancel", 0, 5, self)
         progress.setWindowTitle("Forward Modeling")
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setMinimumDuration(0)
         progress.setValue(0)
         QApplication.processEvents()
 
+        def canceled():
+            if progress.wasCanceled():
+                progress.close()
+                self.loreta_checkbox.setChecked(False)
+                return True
+            return False
+
         try:
-            raw = mne.io.read_raw_edf(file_path, preload=True, verbose="ERROR")
-            
-            montage_names = set("Fz Cz Pz Oz Fp1 Fp2 F3 F4 F7 F8 C3 C4 T7 T8 P3 P4 P7 P8 O1 O2".split())
-            new_ch_names = {}
-            for ch in raw.ch_names:
-                clean_ch = re.sub(r'^EEG\s*', '', ch, flags=re.IGNORECASE)
-                if clean_ch in montage_names:
-                    new_ch_names[ch] = clean_ch
-            raw.rename_channels(new_ch_names)
-            
-            progress.setValue(1)
-            QApplication.processEvents()
-            if progress.wasCanceled():
-                progress.close()
-                self.loreta_checkbox.setChecked(False)
-                return
+            with np.errstate(divide="ignore", invalid="ignore"):
+                # ---------- 1. Read EDF and match channel names ----------
+                raw = mne.io.read_raw_edf(file_path, preload=True, verbose="ERROR")
 
-            age = self._nearest_age(self.age_slider.value())
-            template_name = self._pick_scalp_template(age)
-            if not template_name:
-                raise ValueError("No overlay template available.")
-            
-            _, electrode_positions, _, fiducials = load_mne_infant_scalp(template_name)
-            
-            channels_to_keep = [ch for ch in raw.ch_names if ch in electrode_positions]
-            if not channels_to_keep:
-                raise ValueError("None of the EDF channels match the 10-20 montage.")
-            raw.pick_channels(channels_to_keep)
-            
-            ch_pos_m = {ch: electrode_positions[ch] / 1000.0 for ch in channels_to_keep}
-            
-            if fiducials:
-                ch_pos_m.update(fiducials)
-                
-            dig_montage = mne.channels.make_dig_montage(ch_pos=ch_pos_m, coord_frame='head')
-            raw.set_montage(dig_montage, match_case=False, on_missing='raise')
-            
-            raw.set_eeg_reference('average', projection=True)
-            raw.apply_proj()
-            
-            progress.setValue(2)
-            QApplication.processEvents()
-            if progress.wasCanceled():
-                progress.close()
-                self.loreta_checkbox.setChecked(False)
-                return
+                if raw.n_times < 2:
+                    raise ValueError("The EDF file contains too few time samples.")
+                if raw.times[-1] > 60:          # keep the inverse fast and light
+                    raw.crop(tmax=60.0)
 
-            bem = mne.make_sphere_model(
-                r0='auto', head_radius='auto', info=raw.info, verbose=False
-            )
-            src = mne.setup_volume_source_space(
-                pos=10.0, sphere=bem, verbose=False
-            )
-            
-            fwd = mne.make_forward_solution(
-                raw.info, trans=None, src=src, bem=bem, meg=False, eeg=True, verbose=False
-            )
-            
-            cov = mne.make_ad_hoc_cov(raw.info)
-            inv = mne.minimum_norm.make_inverse_operator(
-                raw.info, fwd, cov, loose=0.2, depth=0.8, verbose=False
-            )
-            
-            stc = mne.minimum_norm.apply_inverse_raw(
-                raw, inv, lambda2=1./9., method='eLORETA', verbose=False
-            )
-            
-            progress.setValue(3)
-            QApplication.processEvents()
-            if progress.wasCanceled():
-                progress.close()
-                self.loreta_checkbox.setChecked(False)
-                return
+                montage_names = "Fz Cz Pz Oz Fp1 Fp2 F3 F4 F7 F8 C3 C4 T7 T8 P3 P4 P7 P8 O1 O2".split()
+                lookup = {n.lower(): n for n in montage_names}
+                lookup.update({"t3": "T7", "t4": "T8", "t5": "P7", "t6": "P8"})
 
-            source_power = stc.data.max(axis=1)
-            src_points = src[0]['rr'][stc.vertices[0]] * 1000.0
-            
-            tree = cKDTree(src_points)
-            
-            self.loreta_data = {
-                "tree": tree,
-                "power": source_power,
-                "max_power": float(source_power.max())
-            }
-            
-            progress.setValue(4)
-            progress.close()
-            self.update_view()
+                new_ch_names = {}
+                for ch in raw.ch_names:
+                    clean = re.sub(r"^EEG[\s_-]*", "", ch, flags=re.IGNORECASE)
+                    clean = re.sub(r"[-_\s]*(REF|LE|AV|A1|A2)$", "", clean, flags=re.IGNORECASE)
+                    target = lookup.get(clean.strip().lower())
+                    if target and target not in new_ch_names.values():
+                        new_ch_names[ch] = target
+                raw.rename_channels(new_ch_names)
+
+                progress.setValue(1)
+                QApplication.processEvents()
+                if canceled():
+                    return
+
+                # ---------- 2. Template electrodes ----------
+                age = self._nearest_age(self.age_slider.value())
+                template_name = self._pick_scalp_template(age)
+                if not template_name:
+                    raise ValueError("No overlay template available.")
+
+                scalp, electrode_positions, _, fiducials = load_mne_infant_scalp(template_name)
+
+                channels_to_keep = [ch for ch in raw.ch_names if ch in electrode_positions]
+                if len(channels_to_keep) < 4:
+                    raise ValueError(
+                        f"Only {len(channels_to_keep)} EDF channels match the 10-20 montage "
+                        f"(need at least 4). EDF channels: {raw.ch_names}"
+                    )
+                raw.pick(channels_to_keep)
+
+                # ---------- 3. Normalize electrodes to a realistic head (meters) ----------
+                raw_pts = np.array(
+                    [np.asarray(electrode_positions[ch], dtype=float) for ch in channels_to_keep]
+                )
+                print("Electrode coord extent (template units):",
+                      raw_pts.max(axis=0) - raw_pts.min(axis=0))
+
+                center = np.asarray(scalp.center, dtype=float)
+                rel = raw_pts - center
+                mean_r = float(np.linalg.norm(rel, axis=1).mean())
+                if not np.isfinite(mean_r) or mean_r <= 0:
+                    raise ValueError("Electrode positions are degenerate (all at one point).")
+
+                HEAD_RADIUS_M = 0.07                      # typical infant head radius
+                rel_m = rel * (HEAD_RADIUS_M / mean_r)    # now ~7 cm
+
+                ch_pos_m = {ch: rel_m[i] for i, ch in enumerate(channels_to_keep)}
+
+                # no fiducials: not needed for EEG with trans=None + sphere model
+                dig_montage = mne.channels.make_dig_montage(ch_pos=ch_pos_m, coord_frame="head")
+                raw.set_montage(dig_montage, match_case=False, on_missing="raise", verbose=False)
+
+                raw.set_eeg_reference("average", projection=True, verbose=False)
+                raw.apply_proj(verbose=False)
+
+                progress.setValue(2)
+                QApplication.processEvents()
+                if canceled():
+                    return
+
+                # ---------- 4. Sphere model + volume source space ----------
+                progress.setLabelText("Computing forward solution...")
+                QApplication.processEvents()
+
+                radius = HEAD_RADIUS_M
+                bem = mne.make_sphere_model(
+                    r0=(0.0, 0.0, 0.0), head_radius=radius, verbose=False
+                )
+
+                # custom volume grid, all in meters (version-independent)
+                src_radius = radius * 0.75
+                step = 0.007
+                g = np.arange(-src_radius, src_radius + 1e-9, step)
+                xx, yy, zz = np.meshgrid(g, g, g, indexing="ij")
+                rr = np.column_stack([xx.ravel(), yy.ravel(), zz.ravel()])
+                rr = rr[np.linalg.norm(rr, axis=1) <= src_radius]
+                nn = np.zeros_like(rr)
+                nn[:, 2] = 1.0
+
+                src = mne.setup_volume_source_space(
+                    pos=dict(rr=rr, nn=nn), verbose=False
+                )
+                print(f"Source space: {src[0]['nuse']} sources")
+
+                fwd = mne.make_forward_solution(
+                    raw.info, trans=None, src=src, bem=bem,
+                    meg=False, eeg=True, mindist=3.0, verbose=False,
+                )
+
+                # ---------- 4. Sphere model + volume source space ----------
+                progress.setLabelText("Computing forward solution...")
+                QApplication.processEvents()
+
+                radius = HEAD_RADIUS_M
+                bem = mne.make_sphere_model(
+                    r0=(0.0, 0.0, 0.0), head_radius=radius, verbose=False
+                )
+
+                # custom volume grid, all in meters (version-independent)
+                src_radius = radius * 0.75
+                step = 0.007
+                g = np.arange(-src_radius, src_radius + 1e-9, step)
+                xx, yy, zz = np.meshgrid(g, g, g, indexing="ij")
+                rr = np.column_stack([xx.ravel(), yy.ravel(), zz.ravel()])
+                rr = rr[np.linalg.norm(rr, axis=1) <= src_radius]
+                nn = np.zeros_like(rr)
+                nn[:, 2] = 1.0
+
+                src = mne.setup_volume_source_space(
+                    pos=dict(rr=rr, nn=nn), verbose=False
+                )
+                print(f"Source space: {src[0]['nuse']} sources")
+
+                fwd = mne.make_forward_solution(
+                    raw.info, trans=None, src=src, bem=bem,
+                    meg=False, eeg=True, mindist=3.0, verbose=False,
+                )
+
+                # ---------- 5. Inverse solution ----------
+                cov = mne.make_ad_hoc_cov(raw.info, verbose=False)
+                cov_data = cov["data"].copy()
+                if cov_data.ndim == 1:
+                    cov_data = np.maximum(cov_data, 1e-10)
+                else:
+                    cov_data = cov_data + np.eye(cov_data.shape[0]) * 1e-10
+                cov["data"] = cov_data
+
+                inv = mne.minimum_norm.make_inverse_operator(
+                    raw.info, fwd, cov, loose=1.0, depth=0.8, verbose=False
+                )
+
+                try:
+                    stc = mne.minimum_norm.apply_inverse_raw(
+                        raw, inv, lambda2=0.1, method="dSPM", verbose=False
+                    )
+                except Exception as e:
+                    print(f"dSPM failed: {e}. Using MNE with high regularization.")
+                    stc = mne.minimum_norm.apply_inverse_raw(
+                        raw, inv, lambda2=10.0, method="MNE", verbose=False
+                    )
+
+                progress.setValue(3)
+                QApplication.processEvents()
+                if canceled():
+                    return
+
+                stc.data = np.nan_to_num(stc.data, nan=0.0, posinf=0.0, neginf=0.0)
+                source_power = stc.data.max(axis=1)
+
+                # ---------- 6. Map sources into the brain-mesh frame ----------
+                ref_parts = [
+                    m for m in (self._get_mesh(age, h, "outer") for h in ("left", "right"))
+                    if m is not None
+                ]
+                if not ref_parts:
+                    raise ValueError("No brain surface available to align the sources to.")
+                reference = ref_parts[0] if len(ref_parts) == 1 else ref_parts[0].merge(ref_parts[1:])
+
+                src_points = src[0]["rr"][stc.vertices[0]] * 1000.0        # mm, centered frame
+                s_lo, s_hi = src_points.min(axis=0), src_points.max(axis=0)
+                s_size = np.maximum(s_hi - s_lo, 1e-6)
+                s_center = (s_lo + s_hi) / 2.0
+
+                b = np.asarray(reference.bounds)
+                b_lo, b_hi = b[[0, 2, 4]], b[[1, 3, 5]]
+                b_size = b_hi - b_lo
+                b_center = (b_lo + b_hi) / 2.0
+
+                src_points = (src_points - s_center) * (b_size / s_size) * 0.95 + b_center
+
+                tree = cKDTree(src_points)
+                max_p_val = float(source_power.max())
+                if max_p_val == 0 or np.isnan(max_p_val):
+                    max_p_val = 1e-12
+
+                self.loreta_data = {
+                    "tree": tree,
+                    "power": source_power,
+                    "max_power": max_p_val,
+                }
+
+                # ---------- 7. Connectivity ----------
+                progress.setLabelText("Computing connectivity...")
+                QApplication.processEvents()
+
+                ch_data = raw.get_data()
+                n_samples = ch_data.shape[1]
+                std_dev = ch_data.std(axis=1, keepdims=True)
+                std_dev[std_dev == 0] = 1e-12
+                ch_data = (ch_data - ch_data.mean(axis=1, keepdims=True)) / std_dev
+                ch_corr = np.dot(ch_data, ch_data.T) / max(n_samples, 1)
+                ch_corr = np.nan_to_num(ch_corr, nan=0.0, posinf=0.0, neginf=0.0)
+
+                # electrodes in the same fitted frame as the displayed brain
+                _, electrodes_fit = fit_template_to_brain(scalp, electrode_positions, reference)
+                nodes_3d = np.array([electrodes_fit[ch] for ch in raw.ch_names])
+
+                self.connectome_data = {"ch_corr": ch_corr, "nodes": nodes_3d}
+
+                progress.setValue(5)
+                progress.close()
+                self.update_view()
 
         except Exception as exc:
             progress.close()
-            QMessageBox.critical(self, "LORETA Error", str(exc))
+            traceback.print_exc()
+            QMessageBox.critical(self, "LORETA Error", f"{type(exc).__name__}: {exc}")
             self.loreta_checkbox.setChecked(False)
-
+            
     def update_view(self, *_):
         requested_age = self.age_slider.value()
         age = self._nearest_age(requested_age)
@@ -730,6 +887,7 @@ class InfantBrainViewer(QMainWindow):
         show_electrodes = self.electrodes_checkbox.isChecked()
         show_tracts = self.tracts_checkbox.isChecked()
         show_animate = self.animate_checkbox.isChecked()
+        show_connectome = self.connectome_checkbox.isChecked()
 
         self.anim_timer.stop()
         self.anim_actors.clear()
@@ -738,75 +896,177 @@ class InfantBrainViewer(QMainWindow):
         self._configure_lighting()
 
         try:
-            # Make LORETA transparent if we are also showing tracts
-            loreta_opacity = 0.40 if show_tracts else 0.8
-            brain_opacity = 0.30 if (show_tracts or self.loreta_data) else 1.0
+            with np.errstate(divide='ignore', invalid='ignore'):
+                loreta_opacity = 0.40 if show_tracts else 0.8
+                brain_opacity = 0.30 if (show_tracts or self.loreta_data) else 1.0
 
-            for hemi in hemispheres:
-                mesh = self._get_mesh(age, hemi, surface_type)
-                if mesh is None:
-                    continue
+                for hemi in hemispheres:
+                    mesh = self._get_mesh(age, hemi, surface_type)
+                    if mesh is None:
+                        continue
 
-                if self.loreta_data is not None:
-                    tree = self.loreta_data["tree"]
-                    power = self.loreta_data["power"]
-                    max_power = self.loreta_data["max_power"]
-                    
-                    distances, indices = tree.query(mesh.points)
-                    mesh["loreta_power"] = power[indices] / max_power
-                    
-                    self.plotter.add_mesh(
-                        mesh,
-                        scalars="loreta_power",
-                        cmap="hot",
-                        show_scalar_bar=True,
-                        scalar_bar_args={
-                            'title': 'LORETA Power',
-                            'color': 'white',
-                            'title_font_size': 16,
-                            'label_font_size': 14,
-                            'n_labels': 5,
-                            'position_x': 0.02,
-                            'position_y': 0.05,
-                        },
-                        opacity=loreta_opacity,
-                        smooth_shading=True,
-                        lighting=True,
-                        ambient=0.2,
-                        diffuse=0.8,
-                        specular=0.2,
-                        reset_camera=False,
-                        name=f"loreta_{hemi}"
-                    )
-                    
-                else:
-                    if rendering == "Wireframe":
-                        wire = self._get_wireframe_mesh(age, hemi, surface_type, mesh)
+                    if self.loreta_data is not None:
+                        tree = self.loreta_data["tree"]
+                        power = self.loreta_data["power"]
+                        max_power = self.loreta_data["max_power"]
+                        
+                        distances, indices = tree.query(mesh.points)
+                        
+                        if max_power > 0:
+                            power_vals = power[indices] / max_power
+                        else:
+                            power_vals = np.zeros_like(power[indices])
+                            
+                        mesh["loreta_power"] = np.nan_to_num(power_vals, nan=0.0, posinf=0.0, neginf=0.0)
+                        
                         self.plotter.add_mesh(
-                            wire, style="wireframe", color="black",
-                            line_width=1.0, lighting=False, reset_camera=False,
+                            mesh,
+                            scalars="loreta_power",
+                            cmap="hot",
+                            show_scalar_bar=True,
+                            scalar_bar_args={
+                                'title': 'LORETA Power',
+                                'color': 'white',
+                                'title_font_size': 16,
+                                'label_font_size': 14,
+                                'n_labels': 5,
+                                'position_x': 0.02,
+                                'position_y': 0.05,
+                            },
+                            opacity=loreta_opacity,
+                            smooth_shading=True,
+                            lighting=True,
+                            ambient=0.2,
+                            diffuse=0.8,
+                            specular=0.2,
+                            reset_camera=False,
+                            name=f"loreta_{hemi}"
                         )
-                    elif rendering == "Flat":
-                        self.plotter.add_mesh(
-                            mesh, color="#9DBBD2", smooth_shading=False,
-                            opacity=brain_opacity,
-                            lighting=True, ambient=0.22, diffuse=0.78,
-                            specular=0.12, specular_power=18, reset_camera=False,
-                        )
+                        
                     else:
-                        self.plotter.add_mesh(
-                            mesh, color="#9DBBD2", smooth_shading=True,
-                            opacity=brain_opacity,
-                            lighting=True, ambient=0.20, diffuse=0.78,
-                            specular=0.24, specular_power=28, reset_camera=False,
-                        )
+                        if rendering == "Wireframe":
+                            wire = self._get_wireframe_mesh(age, hemi, surface_type, mesh)
+                            self.plotter.add_mesh(
+                                wire, style="wireframe", color="black",
+                                line_width=1.0, lighting=False, reset_camera=False,
+                            )
+                        elif rendering == "Flat":
+                            self.plotter.add_mesh(
+                                mesh, color="#9DBBD2", smooth_shading=False,
+                                opacity=brain_opacity,
+                                lighting=True, ambient=0.22, diffuse=0.78,
+                                specular=0.12, specular_power=18, reset_camera=False,
+                            )
+                        else:
+                            self.plotter.add_mesh(
+                                mesh, color="#9DBBD2", smooth_shading=True,
+                                opacity=brain_opacity,
+                                lighting=True, ambient=0.20, diffuse=0.78,
+                                specular=0.24, specular_power=28, reset_camera=False,
+                            )
 
-            # REMOVED 'and not self.loreta_data' SO TRACTS CAN SHOW WITH LORETA
-            if show_tracts:
-                try:
-                    self._load_tracts()
-                    if self.tract_cache:
-                        tract_mesh = self.tract_cache["merged"]
+                if show_tracts:
+                    try:
+                        self._load_tracts()
+                        if self.tract_cache:
+                            tract_mesh = self.tract_cache["merged"]
+
+                            reference_parts = []
+                            for hemi_ref in ("left", "right"):
+                                ref_mesh = self._get_mesh(age, hemi_ref, "outer")
+                                if ref_mesh is not None:
+                                    reference_parts.append(ref_mesh)
+
+                            if reference_parts:
+                                reference = (
+                                    reference_parts[0]
+                                    if len(reference_parts) == 1
+                                    else reference_parts[0].merge(reference_parts[1:])
+                                )
+                                tract_display = fit_tracts_to_brain(
+                                    tract_mesh, reference, margin=0.95
+                                )
+                            else:
+                                tract_display = tract_mesh
+
+                            self.plotter.add_mesh(
+                                tract_display,
+                                scalars="cluster_id",
+                                cmap="turbo",
+                                show_scalar_bar=False,
+                                line_width=2.5,
+                                opacity=0.9,
+                                render_lines_as_tubes=False, # Disabled to prevent zero-length division
+                                lighting=False,
+                                reset_camera=False,
+                                name="tracts",
+                            )
+                            
+                            if show_animate:
+                                self._setup_animation(tract_display)
+
+                    except Exception as exc:
+                        print(f"Tract rendering failed: {exc}")
+
+                if show_connectome and self.connectome_data is not None:
+                    try:
+                        ch_corr = self.connectome_data['ch_corr']
+                        nodes_3d = self.connectome_data['nodes']
+                        
+                        ref_mesh = None
+                        ref_parts = []
+                        for h in ("left", "right"):
+                            m = self._get_mesh(age, h, surface_type)
+                            if m is not None:
+                                ref_parts.append(m)
+                        
+                        if ref_parts:
+                            ref_mesh = ref_parts[0] if len(ref_parts) == 1 else ref_parts[0].merge(ref_parts[1:])
+                            mesh_tree = cKDTree(ref_mesh.points)
+                            snapped_nodes = []
+                            for pt in nodes_3d:
+                                d, idx = mesh_tree.query(pt)
+                                snapped_nodes.append(ref_mesh.points[idx])
+                            nodes_3d = np.array(snapped_nodes)
+
+                        n_ch = len(ch_corr)
+                        connections = []
+                        for i in range(n_ch):
+                            for j in range(i+1, n_ch):
+                                connections.append((i, j, ch_corr[i, j]))
+                        
+                        connections.sort(key=lambda x: x[2], reverse=True)
+                        connections = connections[:50]
+                        
+                        lines = []
+                        for i, j, strength in connections:
+                            pt1 = nodes_3d[i]
+                            pt2 = nodes_3d[j]
+                            if np.linalg.norm(pt1 - pt2) > 1e-4: # Filter out zero-length lines
+                                line = pv.Line(pt1, pt2, resolution=10)
+                                lines.append(line)
+                        
+                        if lines:
+                            merged_lines = pv.merge(lines)
+                            self.plotter.add_mesh(
+                                merged_lines,
+                                color="#FFD700",
+                                line_width=4.0,
+                                render_lines_as_tubes=False, # Disabled to prevent zero-length division
+                                opacity=0.9,
+                                lighting=False,
+                                reset_camera=False,
+                                name="connectome"
+                            )
+                    except Exception as exc:
+                        print(f"Connectome rendering failed: {exc}")
+
+                overlay_template = None
+                if show_electrodes:
+                    overlay_template = self._pick_scalp_template(requested_age)
+                    if overlay_template is not None:
+                        scalp_template = self.scalp_templates[overlay_template]
+                        electrode_template = self.electrode_templates[overlay_template]
 
                         reference_parts = []
                         for hemi_ref in ("left", "right"):
@@ -820,113 +1080,69 @@ class InfantBrainViewer(QMainWindow):
                                 if len(reference_parts) == 1
                                 else reference_parts[0].merge(reference_parts[1:])
                             )
-                            tract_display = fit_tracts_to_brain(
-                                tract_mesh, reference, margin=0.95
+                            scalp_fit, electrodes_fit = fit_template_to_brain(
+                                scalp_template, electrode_template, reference
                             )
-                        else:
-                            tract_display = tract_mesh
-
-                        self.plotter.add_mesh(
-                            tract_display,
-                            scalars="cluster_id",
-                            cmap="turbo",
-                            show_scalar_bar=False,
-                            line_width=2.5,
-                            opacity=0.9,
-                            render_lines_as_tubes=True,
-                            lighting=False,
-                            reset_camera=False,
-                            name="tracts",
-                        )
-                        
-                        if show_animate:
-                            self._setup_animation(tract_display)
-
-                except Exception as exc:
-                    print(f"Tract rendering failed: {exc}")
-
-            overlay_template = None
-            if show_electrodes:
-                overlay_template = self._pick_scalp_template(requested_age)
-                if overlay_template is not None:
-                    scalp_template = self.scalp_templates[overlay_template]
-                    electrode_template = self.electrode_templates[overlay_template]
-
-                    reference_parts = []
-                    for hemi_ref in ("left", "right"):
-                        ref_mesh = self._get_mesh(age, hemi_ref, "outer")
-                        if ref_mesh is not None:
-                            reference_parts.append(ref_mesh)
-
-                    if reference_parts:
-                        reference = (
-                            reference_parts[0]
-                            if len(reference_parts) == 1
-                            else reference_parts[0].merge(reference_parts[1:])
-                        )
-                        scalp_fit, electrodes_fit = fit_template_to_brain(
-                            scalp_template, electrode_template, reference
-                        )
-                        self.plotter.add_mesh(
-                            scalp_fit, color="#E8C9A8", opacity=0.3,
-                            smooth_shading=True, lighting=True,
-                            reset_camera=False,
-                        )
-                        if electrodes_fit:
-                            names = list(electrodes_fit.keys())
-                            pts = np.vstack([electrodes_fit[n] for n in names])
-
-                            center = np.asarray(scalp_fit.center, dtype=float)
-                            radial = pts - center
-                            rn = np.linalg.norm(radial, axis=1, keepdims=True)
-                            rn[rn < 1e-12] = 1.0
-                            sscale = float(np.linalg.norm(
-                                np.asarray(scalp_fit.bounds)[[1, 3, 5]]
-                                - np.asarray(scalp_fit.bounds)[[0, 2, 4]]
-                            ))
-                            pts = pts + 0.025 * sscale * radial / rn
-
-                            marker_radius = max(sscale * 0.022, 0.004)
-                            label_pts = pts + (radial / rn) * marker_radius * 1.5
-                            spheres = [
-                                pv.Sphere(
-                                    radius=marker_radius,
-                                    center=tuple(float(v) for v in point),
-                                    theta_resolution=16,
-                                    phi_resolution=16,
-                                )
-                                for point in pts
-                            ]
-                            markers = spheres[0]
-                            for sphere in spheres[1:]:
-                                markers = markers.merge(sphere, merge_points=False)
-
                             self.plotter.add_mesh(
-                                markers, color="#FF4D00",
-                                ambient=1.0, diffuse=0.0, specular=0.0,
-                                lighting=False, reset_camera=False,
-                                name="electrode_markers",
-                            )
-                            self.plotter.add_point_labels(
-                                label_pts, names, name="electrode_labels",
-                                point_size=0, font_size=14,
-                                text_color="#FFFFFF",
-                                shape="rounded_rect", fill_shape=True,
-                                shape_color="#202833", shape_opacity=0.9,
-                                always_visible=False, tolerance=0.002,
-                                show_points=False, render_points_as_spheres=False,
+                                scalp_fit, color="#E8C9A8", opacity=0.3,
+                                smooth_shading=True, lighting=True,
                                 reset_camera=False,
                             )
+                            if electrodes_fit:
+                                names = list(electrodes_fit.keys())
+                                pts = np.vstack([electrodes_fit[n] for n in names])
 
-            if show_axes:
-                self.plotter.show_bounds(
-                    grid="front", location="outer", all_edges=True,
-                    xtitle="X", ytitle="Y", ztitle="Z",
-                    fmt="%.3f", color="gray", font_size=10,
-                )
+                                center = np.asarray(scalp_fit.center, dtype=float)
+                                radial = pts - center
+                                rn = np.linalg.norm(radial, axis=1, keepdims=True)
+                                rn[rn < 1e-12] = 1.0
+                                sscale = float(np.linalg.norm(
+                                    np.asarray(scalp_fit.bounds)[[1, 3, 5]]
+                                    - np.asarray(scalp_fit.bounds)[[0, 2, 4]]
+                                ))
+                                pts = pts + 0.025 * sscale * radial / rn
 
-            self.plotter.reset_camera()
-            self.plotter.render()
+                                marker_radius = max(sscale * 0.022, 0.004)
+                                label_pts = pts + (radial / rn) * marker_radius * 1.5
+                                spheres = [
+                                    pv.Sphere(
+                                        radius=marker_radius,
+                                        center=tuple(float(v) for v in point),
+                                        theta_resolution=16,
+                                        phi_resolution=16,
+                                    )
+                                    for point in pts
+                                ]
+                                markers = spheres[0]
+                                for sphere in spheres[1:]:
+                                    markers = markers.merge(sphere, merge_points=False)
+
+                                self.plotter.add_mesh(
+                                    markers, color="#FF4D00",
+                                    ambient=1.0, diffuse=0.0, specular=0.0,
+                                    lighting=False, reset_camera=False,
+                                    name="electrode_markers",
+                                )
+                                self.plotter.add_point_labels(
+                                    label_pts, names, name="electrode_labels",
+                                    point_size=0, font_size=14,
+                                    text_color="#FFFFFF",
+                                    shape="rounded_rect", fill_shape=True,
+                                    shape_color="#202833", shape_opacity=0.9,
+                                    always_visible=False, tolerance=0.002,
+                                    show_points=False, render_points_as_spheres=False,
+                                    reset_camera=False,
+                                )
+
+                if show_axes:
+                    self.plotter.show_bounds(
+                        grid="front", location="outer", all_edges=True,
+                        xtitle="X", ytitle="Y", ztitle="Z",
+                        fmt="%.3f", color="gray", font_size=10,
+                    )
+
+                self.plotter.reset_camera()
+                self.plotter.render()
 
         except Exception as exc:
             print(f"Display error: {exc}")
