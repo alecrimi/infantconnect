@@ -28,13 +28,16 @@ Example screenshot showing the brain tractography together with the EEG electrod
 ## Repository files
 
 - `infant_connect.py` — main interactive 3D viewer and application entry point.
-  
+- `effconn.py` — standalone effective-connectivity implementation (optional alternative to installing `effconnpy`).
+- `requirements.txt` — Python dependencies for the viewer.
+   
 - `generate_cortex.py` — prepares/generates the cortical surface files used by the viewer.
 - `fetch_tract_atlas.py` — fetches the tractography atlas used for the tract overlay.
 - `atlas.json` — atlas manifest/configuration used by the viewer.
 - `tract_atlases/` — directory for tractography atlas data.
-- `effconn.py` — standalone effective-connectivity implementation (optional alternative to installing `effconnpy`).
-- `requirements.txt` — Python dependencies for the viewer. 
+- `data/` — directory for cortex surfaces.
+- `mne_templates/` — directory for skull and EEG electrodes templates.
+
 
 The cortical surfaces should be prepared with `generate_cortex.py`, and the tractography atlas should be retrieved with `fetch_tract_atlas.py` before launching the viewer. The scalp, skull, and electrode/montage template data are downloaded automatically by the viewer the first time when needed and cached locally.
 
@@ -49,7 +52,7 @@ The cortical surfaces should be prepared with `generate_cortex.py`, and the trac
 Clone the repository and enter its directory:
 
 ```bash
-git clone https://github.com/alecrimi/infantconnect/
+git clone https://github.com/alecrimi/infantconnect.git
 cd infantconnect
 ```
 
@@ -118,7 +121,15 @@ To run the analysis, load an EEG recording through the viewer and enable the eff
 
 ## Data and attribution
 
-The infant scalp/skull and montage templates are downloaded from the public [infant template paper repository](https://github.com/christian-oreilly/infant_template_paper/) when required. The cortical surfaces and tractography atlas are prepared or fetched by the scripts and should retain the licensing and attribution requirements of their original sources. Check the source projects and data licences before redistribution.
+The project integrates three publicly available neuroimaging resources:
+
+- **[NABA800FC tractography atlas](https://zenodo.org/records/18227691)** — a cross-population white-matter tractography atlas for neonates and adults. The dataset is distributed under the [Creative Commons Attribution 4.0 International (CC BY 4.0) licence](https://creativecommons.org/licenses/by/4.0/).
+
+- **[MNE infant head/skull surface templates](https://github.com/christian-oreilly/infant_template_paper)** — infant head and skull surface templates used for EEG electrode visualisation and anatomical modelling.
+
+- **[4D UNC Neonatal and Infant Cortical Surface Atlases](https://www.nitrc.org/projects/infantsurfatlas/)** — age-specific neonatal and infant cortical surfaces, provided in VTK format for 3D brain visualisation.
+
+Use EEG data from Openneuro to test.
 
 ## Troubleshooting
 
