@@ -146,7 +146,7 @@ Use EEG data from Openneuro to test.
 
 ## Citation
 
-If you use this software in research, please cite this repository http://zenodo
+If you use this software in research, please cite this repository [10.5281/zenodo.23506486](https://zenodo.org/records/23506486)
 
 ## Licence
 
