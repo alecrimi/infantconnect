@@ -24,22 +24,19 @@ The scalp and EEG electrode positions are shown in 3D.
 Example screenshot showing the brain tractography together with the EEG electrode overlay.
 
 ![Brain tractography overlaid with EEG electrodes](tracts.png)
-
-> Keep `EEG_electrodes.png` and `tracts.png` in the repository root (alongside this README) so GitHub can display the images.
-
+ 
 ## Repository files
 
 - `infant_connect.py` — main interactive 3D viewer and application entry point.
+  
 - `generate_cortex.py` — prepares/generates the cortical surface files used by the viewer.
 - `fetch_tract_atlas.py` — fetches the tractography atlas used for the tract overlay.
 - `atlas.json` — atlas manifest/configuration used by the viewer.
 - `tract_atlases/` — directory for tractography atlas data.
 - `effconn.py` — standalone effective-connectivity implementation (optional alternative to installing `effconnpy`).
-- `requirements.txt` — Python dependencies for the viewer.
-- `EEG_electrodes.png` — screenshot/figure showing EEG electrode positions.
-- `tracts.png` — screenshot/figure showing the tractography and electrode overlay.
+- `requirements.txt` — Python dependencies for the viewer. 
 
-The cortical surfaces should be prepared with `generate_cortex.py`, and the tractography atlas should be retrieved with `fetch_tract_atlas.py` before launching the viewer. The scalp, skull, and electrode/montage template data are downloaded automatically by the viewer when needed and cached locally.
+The cortical surfaces should be prepared with `generate_cortex.py`, and the tractography atlas should be retrieved with `fetch_tract_atlas.py` before launching the viewer. The scalp, skull, and electrode/montage template data are downloaded automatically by the viewer the first time when needed and cached locally.
 
 ## Requirements
 
@@ -52,8 +49,8 @@ The cortical surfaces should be prepared with `generate_cortex.py`, and the trac
 Clone the repository and enter its directory:
 
 ```bash
-git clone <YOUR-REPOSITORY-URL>
-cd <YOUR-REPOSITORY-DIRECTORY>
+git clone https://github.com/alecrimi/infantconnect/
+cd infantconnect
 ```
 
 Create and activate a virtual environment (recommended):
@@ -103,7 +100,7 @@ Use the viewer controls to toggle the scalp/electrodes, cortical surfaces, and t
 
 ## Effective connectivity
 
-The viewer can compute and display effective connectivity from an EEG recording using **Granger causality** or **transfer entropy**.
+The viewer can compute and display effective connectivity from an EEG recording using **Granger causality**, **transfer entropy** and other methods.
 
 There are two ways to provide the implementation:
 
@@ -133,10 +130,21 @@ The infant scalp/skull and montage templates are downloaded from the public [inf
 
 ## Citation
 
-If you use this software in research, please cite this repository and the original sources of any cortical surfaces, infant templates, and tractography atlas data used. Add a formal software citation (for example, a Zenodo DOI) here when one is available.
+If you use this software in research, please cite this repository http://zenodo
 
 ## Licence
 
-**The repository's software licence must be specified in a `LICENSE` file before public release.** Do not assume that third-party templates, cortical surfaces, or tractography atlas data are covered by the same licence as this code. Check each source project's terms and preserve any required attribution and usage restrictions.
+Copyright 2026 Alessandro Crimi
 
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 If you intend to release your own code under a permissive licence such as MIT, add the corresponding `LICENSE` file and confirm that this is compatible with all code you authored and redistributed. The licence for this repository does not automatically relicense external datasets or assets.
