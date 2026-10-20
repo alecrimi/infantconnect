@@ -1,0 +1,14 @@
+# Runtime dependencies for the Infant Brain 3D Visualizer
+numpy
+pooch
+pyvista
+pyvistaqt
+vtk
+mne
+scipy
+PySide6
+
+# The script imports `compute_effective_connectivity` from `effconn`.
+# If `effconn` is a local effconn.py file in your project, keep that file
+# alongside the script and do not add a pip dependency for it.
+# If it is provided by a separately installed package, add that package here.
