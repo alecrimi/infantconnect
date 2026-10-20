@@ -1,16 +1,21 @@
 # Infant Brain 3D Visualizer
 
-A Python desktop application for visualizing infant brain surfaces, scalp and EEG electrode positions, and brain tractography in a shared 3D view. The viewer supports age-specific infant templates and can optionally compute and display effective connectivity from EEG recordings.
+A Python desktop application for visualizing infant brain surfaces from 1 to 72 months (at 3-month intervalls), scalp and EEG electrode positions, and brain tractography, LORETA scores, connectome, effective connectivity, in a shared 3D view. The viewer supports age-specific infant templates and can optionally compute and display effective connectivity from EEG recordings.
 
 ## Features
 
 - Interactive 3D visualization of cortical surfaces and tractography.
 - Infant scalp and skull geometry with EEG electrode locations.
-- Age/template selection for infant head geometry (from birth to 2 years in the supplied templates; the viewer's age control extends to 72 months).
+- Age/template selection for infant head geometry.
 - Overlay of electrodes and tractography for spatial inspection.
 - Optional effective-connectivity analysis using **Granger causality** or **transfer entropy** from EEG data.
 - Loading of local atlas and surface files from the repository.
+- Canonical views as axial, sagittal, coronal and automatic saving of the scene.
 
+## Instructions
+- Most of the commands are as radio button on top. The Loreta and effective connectivity analysis expect to load a .edf file
+- The view settings and saving options are in the menu at the bottom of the GUI.
+  
 ## Screenshots
 
 ### EEG electrode locations
