@@ -309,10 +309,9 @@ class InfantBrainViewer(QMainWindow):
 
         self.anim_timer = QTimer(self)
         self.anim_timer.timeout.connect(self._animate_step)
-        self.anim_actors = []
-        self.anim_tracts_points = []
-        self.anim_progress = []
-        self.anim_speeds = []
+        # Each animated pulse follows a real tract streamline. Each entry stores
+        # its ordered points, arc-length coordinates, progress, speed and actors.
+        self.anim_pulses = []
 
         self._build_ui()
         self._connect_signals()
@@ -925,101 +924,134 @@ class InfantBrainViewer(QMainWindow):
         progress.close()
 
     def _setup_animation(self, tract_mesh):
+        """Animate luminous pulses travelling along actual tract streamlines."""
         self.anim_timer.stop()
-        self.anim_actors.clear()
-        self.anim_tracts_points.clear()
-        self.anim_progress.clear()
-        self.anim_speeds.clear()
+        self.anim_pulses.clear()
 
         if tract_mesh.n_cells < 1:
             return
 
-        sphere = pv.Sphere(radius=1.0, theta_resolution=64, phi_resolution=64)
-        dist = np.linalg.norm(sphere.points, axis=1)
-        dist_norm = dist / np.maximum(np.max(dist), 1e-6)
-        glow_vals = np.exp(- (dist_norm * 3.0) ** 2)
-        sphere["glow"] = glow_vals
+        # Use a subset of real streamlines so the effect stays interactive.
+        # The selected fibers are actual tract cells, not randomly moving shapes.
+        n_pulses = min(12, tract_mesh.n_cells)
+        cell_ids = np.linspace(0, tract_mesh.n_cells - 1, n_pulses, dtype=int)
 
-        n_pulses = min(15, tract_mesh.n_cells)
-        cell_ids = np.random.choice(tract_mesh.n_cells, n_pulses, replace=False)
-
-        for cid in cell_ids:
-            pts = tract_mesh.extract_cells(int(cid)).points
+        for pulse_idx, cid in enumerate(cell_ids):
+            try:
+                pts = np.asarray(tract_mesh.get_cell(int(cid)).points, dtype=float)
+            except Exception:
+                continue
             if len(pts) < 2:
                 continue
 
-            self.anim_tracts_points.append(pts)
-            self.anim_progress.append(np.random.rand())
-            self.anim_speeds.append(np.random.uniform(0.005, 0.015))
+            # Arc-length coordinates make pulse speed independent of point spacing.
+            seg_lengths = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+            arc = np.concatenate(([0.0], np.cumsum(seg_lengths)))
+            total_length = float(arc[-1])
+            if not np.isfinite(total_length) or total_length <= 1e-9:
+                continue
 
-            actor = self.plotter.add_mesh(
-                sphere.copy(),
-                scalars="glow",
-                cmap=["#00FFFF", "#FFFFFF"],
-                opacity="glow",
-                lighting=False,
-                smooth_shading=True,
-                reset_camera=False,
-                show_scalar_bar=False,
-                name=f"anim_glow_{len(self.anim_actors)}"
+            # Trail actors: a broad translucent cyan halo and a thin bright core.
+            placeholder_line = pv.Line(pointa=(0.0, 0.0, 0.0), pointb=(0.0, 0.0, 0.001))
+            halo = self.plotter.add_mesh(
+                placeholder_line, color="#00BFFF", line_width=9,
+                opacity=0.22, lighting=False, render_lines_as_tubes=True,
+                reset_camera=False, name=f"pulse_trail_halo_{pulse_idx}",
+            )
+            core = self.plotter.add_mesh(
+                placeholder_line.copy(), color="#7DEBFF", line_width=3.5,
+                opacity=0.98, lighting=False, render_lines_as_tubes=True,
+                reset_camera=False, name=f"pulse_trail_core_{pulse_idx}",
             )
 
-            self.anim_actors.append(actor)
+            # A small, bright head with a larger soft cyan halo.
+            head_halo_mesh = pv.Sphere(
+                radius=max(total_length * 0.018, 0.5), theta_resolution=16,
+                phi_resolution=16,
+            )
+            head_core_mesh = pv.Sphere(
+                radius=max(total_length * 0.008, 0.25), theta_resolution=16,
+                phi_resolution=16,
+            )
+            head_halo = self.plotter.add_mesh(
+                head_halo_mesh, color="#00CFFF", opacity=0.30,
+                lighting=False, reset_camera=False,
+                name=f"pulse_head_halo_{pulse_idx}",
+            )
+            head_core = self.plotter.add_mesh(
+                head_core_mesh, color="#FFF4CF", opacity=1.0,
+                lighting=False, reset_camera=False,
+                name=f"pulse_head_core_{pulse_idx}",
+            )
 
-        if self.anim_actors:
-            self.anim_timer.start(20)
+            self.anim_pulses.append({
+                "points": pts,
+                "arc": arc,
+                "length": total_length,
+                # Stagger pulse positions so they do not all move in synchrony.
+                "progress": (pulse_idx / max(n_pulses, 1)) % 1.0,
+                "speed": 0.20 + 0.08 * (pulse_idx % 4),  # fraction of tract / second
+                "halo": halo,
+                "core": core,
+                "head_halo": head_halo,
+                "head_core": head_core,
+                "trail_length": total_length * 0.16,
+            })
+
+        if self.anim_pulses:
+            self.anim_timer.start(30)  # ~33 frames/s
+
+    @staticmethod
+    def _polyline_between(points, arc, start_distance, end_distance, samples=32):
+        """Interpolate an ordered streamline segment by arc length."""
+        if end_distance <= start_distance:
+            return pv.PolyData()
+        distances = np.linspace(start_distance, end_distance, samples)
+        coords = np.column_stack([
+            np.interp(distances, arc, points[:, axis]) for axis in range(3)
+        ])
+        if len(coords) < 2:
+            return pv.PolyData()
+        lines = np.hstack(([len(coords)], np.arange(len(coords), dtype=np.int64)))
+        return pv.PolyData(coords, lines=lines)
+
+    @staticmethod
+    def _point_on_streamline(points, arc, distance):
+        return np.array([
+            np.interp(distance, arc, points[:, axis]) for axis in range(3)
+        ], dtype=float)
+
+    @staticmethod
+    def _move_actor_to(actor, position):
+        """Translate a sphere actor without rebuilding its mesh each frame."""
+        transform = vtk.vtkTransform()
+        transform.Translate(float(position[0]), float(position[1]), float(position[2]))
+        actor.SetUserMatrix(transform.GetMatrix())
 
     def _animate_step(self):
         if not self.tracts_checkbox.isChecked() or not self.animate_checkbox.isChecked():
             self.anim_timer.stop()
             return
 
-        for i in range(len(self.anim_tracts_points)):
-            pts = self.anim_tracts_points[i]
-            prog = self.anim_progress[i] + self.anim_speeds[i]
-            actor = self.anim_actors[i]
+        dt = 0.03
+        for pulse in self.anim_pulses:
+            points = pulse["points"]
+            arc = pulse["arc"]
+            length = pulse["length"]
 
-            if prog >= 1.0:
-                prog = 0.0
-            self.anim_progress[i] = prog
+            pulse["progress"] = (pulse["progress"] + pulse["speed"] * dt) % 1.0
+            head_distance = pulse["progress"] * length
+            tail_distance = max(0.0, head_distance - pulse["trail_length"])
 
-            n_pts = len(pts)
-            exact_idx = prog * (n_pts - 1)
-            idx = int(exact_idx)
-            t = exact_idx - idx
+            # Draw the trail behind the moving head. Each layer has its own width
+            # and opacity to approximate the luminous effect in a real-time viewer.
+            trail = self._polyline_between(points, arc, tail_distance, head_distance)
+            pulse["halo"].mapper.SetInputData(trail)
+            pulse["core"].mapper.SetInputData(trail.copy())
 
-            if idx >= n_pts - 1:
-                pos = pts[-1]
-                tangent = pts[-1] - pts[-2]
-            else:
-                pos = pts[idx] * (1 - t) + pts[idx + 1] * t
-                tangent = pts[idx + 1] - pts[idx]
-
-            norm = np.linalg.norm(tangent)
-            if norm > 0:
-                tangent = tangent / norm
-            else:
-                tangent = np.array([1.0, 0.0, 0.0])
-
-            x_axis = np.array([1.0, 0.0, 0.0])
-            dot_product = np.clip(np.dot(x_axis, tangent), -1.0, 1.0)
-            angle = np.degrees(np.arccos(dot_product))
-
-            transform = vtk.vtkTransform()
-            transform.Identity()
-            transform.Translate(float(pos[0]), float(pos[1]), float(pos[2]))
-
-            if angle > 0.1:
-                axis = np.cross(x_axis, tangent)
-                axis_norm = np.linalg.norm(axis)
-                if axis_norm > 1e-6:
-                    axis = axis / axis_norm
-                    transform.RotateWXYZ(angle, float(axis[0]), float(axis[1]), float(axis[2]))
-                else:
-                    transform.RotateWXYZ(180, 0, 1, 0)
-
-            transform.Scale(4.0, 1.5, 1.5)
-            actor.SetUserMatrix(transform.GetMatrix())
+            head_position = self._point_on_streamline(points, arc, head_distance)
+            self._move_actor_to(pulse["head_halo"], head_position)
+            self._move_actor_to(pulse["head_core"], head_position)
 
         self.plotter.render()
 
@@ -1279,7 +1311,7 @@ class InfantBrainViewer(QMainWindow):
         effconn_active = show_effconn and self.effconn_matrix is not None
 
         self.anim_timer.stop()
-        self.anim_actors.clear()
+        self.anim_pulses.clear()
 
         self.plotter.clear()
         self._configure_lighting()
