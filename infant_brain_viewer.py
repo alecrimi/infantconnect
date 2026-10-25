@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 from effconn import compute_effective_connectivity
 from bundle_animation import BundleAnimationMixin
 from edf_quality import show_edf_quality_dialog
+from edf_preprocess import show_edf_preprocess_dialog
 
 ROOT = Path(__file__).resolve().parent
 MANIFEST = ROOT / "atlas.json"
@@ -430,6 +431,11 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         )
         qc_row.addWidget(self.edf_quality_button)
         qc_row.addStretch(1)
+        self.edf_preprocess_button = QPushButton("Preprocess EDF…")
+        self.edf_preprocess_button.setToolTip(
+            "Filter, resample and re-reference an EDF recording and save a new EDF"
+        )
+        qc_row.addWidget(self.edf_preprocess_button)
         
 
         eff_row = QHBoxLayout()
@@ -491,6 +497,9 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
 
         self.edf_quality_button.clicked.connect(
             lambda: show_edf_quality_dialog(self)
+        )
+        self.edf_preprocess_button.clicked.connect(
+            lambda: show_edf_preprocess_dialog(self)
         )
 
         self.effconn_checkbox.toggled.connect(self.on_effconn_toggled)
