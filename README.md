@@ -18,21 +18,26 @@ A Python desktop application for visualizing infant brain surfaces from 1 to 72 
 - The view settings and saving options are in the menu at the bottom of the GUI.
 
 Alternatively, most of the commands can be called by command line scripts which are indepdent from the GUI program:
-# Quality check: saves <name>_quality.txt (and/or .json) next to the input or in -o
+### Quality check: saves <name>_quality.txt (and/or .json) next to the input or in -o
 python edf_quality_cli.py rec.edf -o reports/ --format both --fail-on-warn
 
-# Preprocessing from a config file
+### Preprocessing from a config file
 python edf_preprocess_cli.py --write-default-config > preproc.json
+
 python edf_preprocess_cli.py data/*.edf -c preproc.json -o out/ --overwrite
+
 python edf_preprocess_cli.py rec.edf -c preproc.json --set lowpass=45 --set resample=true --set resample_hz=125
 
-# Connectomes, saved as CSV
+### Connectomes, saved as CSV
 python edf_granger_cli.py rec.edf -o out/ --lag 5 --edge-list
+
 python edf_transfer_entropy_cli.py rec.edf -o out/ --bins 4 --lag 1 
 
-# Loreta given different surfaces
+### Loreta given different surfaces
 python edf_loreta_cli.py rec.edf --age 12 -o out/
+
 python edf_loreta_cli.py data/*.edf --age 6 --surface inflated --screenshot --overwrite
+
 python edf_loreta_cli.py rec.edf --age 12 --no-surface      # tables and JSON only
   
 ## Screenshots
