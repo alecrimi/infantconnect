@@ -259,6 +259,33 @@ def fit_tracts_to_brain(tracts, reference_mesh, margin=0.95):
     tracts.points = (tracts.points - t_center) * scale + b_center
     return tracts
 
+def add_direction_colors(tracts):
+    """Per-point RGB from the local fiber direction (standard DTI convention).
+
+    Red   = left-right (x), green = anterior-posterior (y), blue = superior-inferior (z).
+    """
+    n_pts = tracts.n_points
+    pts = np.asarray(tracts.points, dtype=float)
+    tang = np.zeros((n_pts, 3), dtype=float)
+
+    for cid in range(tracts.n_cells):
+        ids = np.asarray(tracts.get_cell(cid).point_ids, dtype=np.int64)
+        n = len(ids)
+        if n < 2:
+            continue
+        p = pts[ids]
+        t = np.empty_like(p)
+        t[1:-1] = p[2:] - p[:-2]
+        t[0] = p[1] - p[0]
+        t[-1] = p[-1] - p[-2]
+        tang[ids] = t
+
+    norm = np.linalg.norm(tang, axis=1, keepdims=True)
+    norm[norm < 1e-12] = 1.0
+    rgb = np.abs(tang / norm)
+    tracts["direction_rgb"] = (rgb * 255).astype(np.uint8)
+    return tracts
+
 
 class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
     def __init__(self):
@@ -1292,10 +1319,12 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
                             else:
                                 tract_display = tract_mesh
 
+                            tract_display = add_direction_colors(tract_display)
+
                             self.plotter.add_mesh(
                                 tract_display,
-                                scalars="cluster_id",
-                                cmap="turbo",
+                                scalars="direction_rgb",
+                                rgb=True,
                                 show_scalar_bar=False,
                                 line_width=2.5,
                                 # Dim the resting fibers while the glow is animating
