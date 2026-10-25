@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from effconn import compute_effective_connectivity
 from bundle_animation import BundleAnimationMixin
+from edf_quality import show_edf_quality_dialog
 
 ROOT = Path(__file__).resolve().parent
 MANIFEST = ROOT / "atlas.json"
@@ -420,6 +421,17 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         self.connectome_checkbox.setEnabled(False)
         controls.addWidget(self.connectome_checkbox)
 
+        qc_row = QHBoxLayout()
+        layout.addLayout(qc_row)
+
+        self.edf_quality_button = QPushButton("Check EDF quality…")
+        self.edf_quality_button.setToolTip(
+            "Load an EDF recording and check its integrity and signal quality"
+        )
+        qc_row.addWidget(self.edf_quality_button)
+        qc_row.addStretch(1)
+        
+
         eff_row = QHBoxLayout()
         layout.addLayout(eff_row)
 
@@ -477,13 +489,18 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         self.connectome_checkbox.toggled.connect(self.update_view)
         self.screenshot_button.clicked.connect(self.save_screenshot)
 
-        self.axial_button.clicked.connect(lambda: self._set_view("axial"))
-        self.coronal_button.clicked.connect(lambda: self._set_view("coronal"))
-        self.sagittal_button.clicked.connect(lambda: self._set_view("sagittal"))
+        self.edf_quality_button.clicked.connect(
+            lambda: show_edf_quality_dialog(self)
+        )
 
         self.effconn_checkbox.toggled.connect(self.on_effconn_toggled)
         self.effconn_combo.currentIndexChanged.connect(self.on_effconn_method_changed)
         self.effconn_change_file_btn.clicked.connect(self._change_effconn_file)
+        
+        self.axial_button.clicked.connect(lambda: self._set_view("axial"))
+        self.coronal_button.clicked.connect(lambda: self._set_view("coronal"))
+        self.sagittal_button.clicked.connect(lambda: self._set_view("sagittal"))
+
 
     def _update_age_label(self, value):
         self.age_label.setText(f"{int(value)} months")
