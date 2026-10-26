@@ -129,7 +129,7 @@ The viewer downloads the required infant scalp, skull, and electrode/montage tem
 From the repository root, run:
 
 ```bash
-python infant_connect.py
+python infant_brain_viewer.py
 ```
 
 Run the command from the repository root after completing the preparation steps above.
