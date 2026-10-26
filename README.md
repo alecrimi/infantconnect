@@ -1,4 +1,4 @@
-# Infant Brain 3D Visualizer
+# Infant Brain 3D Visualizer and Processing
 
 A Python desktop application for visualizing infant brain surfaces from 1 to 72 months (at 3-month intervalls), scalp and EEG electrode positions, and brain tractography, LORETA scores, connectome, effective connectivity, in a shared 3D view. The viewer supports age-specific infant templates and can optionally compute and display effective connectivity from EEG recordings.
 
