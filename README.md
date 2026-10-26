@@ -56,25 +56,24 @@ Example screenshot showing the brain tractography together with the EEG electrod
  
 ## Repository files
 
-- `infant_connect.py` — main interactive 3D viewer and application entry point.
+- `infant_brain_viewer.py` — main interactive 3D viewer and application entry point.
 - `effconn.py` — standalone effective-connectivity implementation (optional alternative to installing `effconnpy`).
 - `requirements.txt` — Python dependencies for the viewer.
 - `generate_cortex.py` — prepares/generates the cortical surface files used by the viewer.
 - `fetch_tract_atlas.py` — fetches the tractography atlas used for the tract overlay.
--  bundle_animation.py - it animates the tracts with a travelling light pulse
--  edf_quality.py - it performs a series of quality checks on a .edf file and provide a report
--  edf_preprocess.py - it performs a series of preprocessing on a given .edf file and it saves it as another .edf file
+- `bundle_animation.py` — it animates the tracts with a travelling light pulse
+- `edf_quality.py` — it performs a series of quality checks on a `.edf` file and provide a report
+- `edf_preprocess.py` — it performs a series of preprocessing on a given `.edf` file and it saves it as another `.edf` file
 - `atlas.json` — atlas manifest/configuration used by the viewer.
 - `tract_atlases/` — directory for tractography atlas data.
 - `data/` — directory for cortex surfaces.
 - `mne_templates/` — directory for skull and EEG electrodes templates.
 
--  edf_quality_cli.py - cli version of the quality checks 
--  edf_preprocess.py - cli version of the series of preprocessing 
--  edf_granger_cli.py - cli version of effective connectivity computation for Granger causality
--  edf_transfer_entropy_cli.py - cli version of effective connectivity computation for Transfer entropy
-
-
+- `edf_quality_cli.py` — cli version of the quality checks
+- `edf_preprocess.py` — cli version of the series of preprocessing
+- `edf_granger_cli.py` — cli version of effective connectivity computation for Granger causality
+- `edf_transfer_entropy_cli.py` — cli version of effective connectivity computation for Transfer entropy
+  
 The cortical surfaces should be prepared with `generate_cortex.py`, and the tractography atlas should be retrieved with `fetch_tract_atlas.py` before launching the viewer. The scalp, skull, and electrode/montage template data are downloaded automatically by the viewer the first time when needed and cached locally.
 
 ## Requirements
