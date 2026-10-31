@@ -413,7 +413,7 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         self.animate_checkbox.setEnabled(False)
         controls.addWidget(self.animate_checkbox)
 
-        self.loreta_checkbox = QCheckBox("Forward Modeling (LORETA)")
+        self.loreta_checkbox = QPushButton("Static LORETA")
         self.loreta_checkbox.setChecked(False)
         controls.addWidget(self.loreta_checkbox)
 
@@ -421,6 +421,12 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         self.connectome_checkbox.setChecked(False)
         self.connectome_checkbox.setEnabled(False)
         controls.addWidget(self.connectome_checkbox)
+
+        self.dynamic_loreta_button = QPushButton("Dynamic LORETA")
+        self.dynamic_loreta_button.setToolTip(
+            "Reconstruct time-varying sLORETA source estimates from an EDF and save them to HDF5 (no visualization)"
+        )
+        controls.addWidget(self.dynamic_loreta_button)
 
         qc_row = QHBoxLayout()
         layout.addLayout(qc_row)
@@ -430,12 +436,14 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
             "Load an EDF recording and check its integrity and signal quality"
         )
         qc_row.addWidget(self.edf_quality_button)
-        qc_row.addStretch(1)
+
         self.edf_preprocess_button = QPushButton("Preprocess EDF…")
         self.edf_preprocess_button.setToolTip(
             "Filter, resample and re-reference an EDF recording and save a new EDF"
         )
         qc_row.addWidget(self.edf_preprocess_button)
+
+        qc_row.addStretch(1)
         
 
         eff_row = QHBoxLayout()
@@ -493,6 +501,7 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         self.animate_checkbox.toggled.connect(self.update_view)
         self.loreta_checkbox.toggled.connect(self.on_loreta_toggled)
         self.connectome_checkbox.toggled.connect(self.update_view)
+        self.dynamic_loreta_button.clicked.connect(self.on_dynamic_loreta_clicked)
         self.screenshot_button.clicked.connect(self.save_screenshot)
 
         self.edf_quality_button.clicked.connect(
@@ -518,7 +527,7 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         if view_name == "axial":
             self.plotter.view_xy()
         elif view_name == "coronal":
-            self.plotter.view_xz()
+            self.plotter.view_vector((0, 1, 0), viewup=(0, 0, 1))  
         elif view_name == "sagittal":
             self.plotter.view_yz()
         try:
@@ -1208,6 +1217,261 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
             traceback.print_exc()
             QMessageBox.critical(self, "LORETA Error", f"{type(exc).__name__}: {exc}")
             self.loreta_checkbox.setChecked(False)
+
+    def on_dynamic_loreta_clicked(self):
+        """Compute continuous sLORETA source time series and export to HDF5.
+
+        This intentionally does not update or render the 3D viewer. The saved
+        HDF5 contains the source time series, source coordinates and metadata.
+        """
+        edf_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select EDF for Dynamic LORETA",
+            str(Path.home()),
+            "EDF Files (*.edf *.EDF);;All Files (*)",
+            options=QFileDialog.Option.DontUseNativeDialog,
+        )
+        if not edf_path:
+            return
+
+        default_name = Path(edf_path).with_name(
+            Path(edf_path).stem + "_dynamic_loreta.h5"
+        )
+        output_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Dynamic LORETA HDF5",
+            str(default_name),
+            "HDF5 Files (*.h5 *.hdf5);;All Files (*)",
+            options=QFileDialog.Option.DontUseNativeDialog,
+        )
+        if not output_path:
+            return
+        if not output_path.lower().endswith((".h5", ".hdf5")):
+            output_path += ".h5"
+
+        progress = QProgressDialog(
+            "Preparing EDF for dynamic sLORETA...", "Cancel", 0, 5, self
+        )
+        progress.setWindowTitle("Dynamic LORETA")
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setValue(0)
+        QApplication.processEvents()
+
+        def was_canceled():
+            QApplication.processEvents()
+            return progress.wasCanceled()
+
+        try:
+            import h5py
+
+            raw = mne.io.read_raw_edf(edf_path, preload=True, verbose="ERROR")
+            if raw.n_times < 2:
+                raise ValueError("The EDF file contains too few time samples.")
+
+            # Match the channel naming convention used by the static source-map
+            # workflow, but retain the complete recording (no 60-second crop).
+            montage_names = (
+                "Fz Cz Pz Oz Fp1 Fp2 F3 F4 F7 F8 C3 C4 T7 T8 "
+                "P3 P4 P7 P8 O1 O2"
+            ).split()
+            lookup = {name.lower(): name for name in montage_names}
+            lookup.update({"t3": "T7", "t4": "T8", "t5": "P7", "t6": "P8"})
+            rename = {}
+            for channel in raw.ch_names:
+                clean = re.sub(r"^EEG[\s_-]*", "", channel, flags=re.IGNORECASE)
+                clean = re.sub(
+                    r"[-_\s]*(REF|LE|AV|A1|A2)$", "", clean, flags=re.IGNORECASE
+                )
+                target = lookup.get(clean.strip().lower())
+                if target and target not in rename.values():
+                    rename[channel] = target
+            if rename:
+                raw.rename_channels(rename)
+
+            progress.setValue(1)
+            if was_canceled():
+                return
+
+            age = self._nearest_age(self.age_slider.value())
+            template_name = self._pick_scalp_template(age)
+            if not template_name:
+                raise ValueError("No infant scalp template is available.")
+            scalp, electrode_positions, _, _ = load_mne_infant_scalp(template_name)
+
+            channels_to_keep = [ch for ch in raw.ch_names if ch in electrode_positions]
+            if len(channels_to_keep) < 4:
+                raise ValueError(
+                    f"Only {len(channels_to_keep)} EDF channels match the 10-20 montage "
+                    f"(need at least 4). EDF channels: {raw.ch_names}"
+                )
+            raw.pick(channels_to_keep)
+
+            raw_pts = np.array(
+                [np.asarray(electrode_positions[ch], dtype=float) for ch in channels_to_keep]
+            )
+            center = np.asarray(scalp.center, dtype=float)
+            rel = raw_pts - center
+            mean_radius = float(np.linalg.norm(rel, axis=1).mean())
+            if not np.isfinite(mean_radius) or mean_radius <= 0:
+                raise ValueError("Electrode positions are degenerate.")
+
+            head_radius_m = 0.07
+            rel_m = rel * (head_radius_m / mean_radius)
+            ch_pos_m = {ch: rel_m[i] for i, ch in enumerate(channels_to_keep)}
+            montage = mne.channels.make_dig_montage(
+                ch_pos=ch_pos_m, coord_frame="head"
+            )
+            raw.set_montage(montage, match_case=False, on_missing="raise", verbose=False)
+            raw.set_eeg_reference("average", projection=True, verbose=False)
+            raw.apply_proj(verbose=False)
+
+            progress.setLabelText("Computing forward model...")
+            progress.setValue(2)
+            if was_canceled():
+                return
+
+            sphere = mne.make_sphere_model(
+                r0=(0.0, 0.0, 0.0), head_radius=head_radius_m, verbose=False
+            )
+            source_radius = head_radius_m * 0.75
+            step = 0.007
+            grid = np.arange(-source_radius, source_radius + 1e-9, step)
+            xx, yy, zz = np.meshgrid(grid, grid, grid, indexing="ij")
+            rr = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
+            rr = rr[np.linalg.norm(rr, axis=1) <= source_radius]
+            nn = np.zeros_like(rr)
+            nn[:, 2] = 1.0
+            src = mne.setup_volume_source_space(
+                pos=dict(rr=rr, nn=nn), verbose=False
+            )
+            fwd = mne.make_forward_solution(
+                raw.info, trans=None, src=src, bem=sphere,
+                meg=False, eeg=True, mindist=3.0, verbose=False,
+            )
+            noise_cov = mne.make_ad_hoc_cov(raw.info, verbose=False)
+            cov_data = noise_cov["data"].copy()
+            if cov_data.ndim == 1:
+                cov_data = np.maximum(cov_data, 1e-10)
+            else:
+                cov_data += np.eye(cov_data.shape[0]) * 1e-10
+            noise_cov["data"] = cov_data
+            inverse_operator = mne.minimum_norm.make_inverse_operator(
+                raw.info, fwd, noise_cov, loose=1.0, depth=0.8, verbose=False
+            )
+
+            progress.setLabelText("Computing continuous sLORETA source estimates...")
+            progress.setValue(3)
+            if was_canceled():
+                return
+
+            # Apply one fixed inverse operator to the complete continuous EEG.
+            lambda2 = 0.1
+            stc = mne.minimum_norm.apply_inverse_raw(
+                raw, inverse_operator, lambda2=lambda2,
+                method="sLORETA", pick_ori="vector", verbose=False,
+            )
+            source_data = np.nan_to_num(
+                stc.data, nan=0.0, posinf=0.0, neginf=0.0
+            ).astype(np.float32, copy=False)
+            source_vertices = np.asarray(stc.vertices[0], dtype=np.int64)
+            source_coordinates_m = np.asarray(
+                src[0]["rr"][source_vertices], dtype=np.float32
+            )
+            times = np.asarray(stc.times, dtype=np.float64)
+
+            progress.setLabelText("Writing dynamic source estimates to HDF5...")
+            progress.setValue(4)
+            if was_canceled():
+                return
+
+            output = Path(output_path)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            with h5py.File(output, "w") as h5:
+                h5.attrs["format"] = "infantconnect_dynamic_loreta"
+                h5.attrs["format_version"] = "1.0"
+                h5.attrs["method"] = "sLORETA"
+                h5.attrs["inverse_method"] = "MNE-Python minimum-norm"
+                h5.attrs["lambda2"] = float(lambda2)
+                h5.attrs["sampling_frequency_hz"] = float(raw.info["sfreq"])
+                h5.attrs["tmin_seconds"] = float(stc.tmin)
+                h5.attrs["age_template_months"] = int(age)
+                h5.attrs["template_name"] = str(template_name)
+                h5.attrs["edf_source"] = str(Path(edf_path).resolve())
+                h5.attrs["source_space"] = "volume"
+                h5.attrs["source_data_note"] = (
+                    "MNE sLORETA estimates; standardized source values, "
+                    "not raw electrode voltages or absolute current density."
+                )
+
+                if source_data.ndim == 3:
+                    # Vector source estimates: (source location, XYZ component, time).
+                    data_chunks = (
+                        max(1, min(source_data.shape[0], 64)),
+                        source_data.shape[1],
+                        max(1, min(source_data.shape[2], 2048)),
+                    )
+                elif source_data.ndim == 2:
+                    data_chunks = (
+                        max(1, min(source_data.shape[0], 128)),
+                        max(1, min(source_data.shape[1], 4096)),
+                    )
+                else:
+                    raise ValueError(
+                        f"Unexpected source estimate dimensions: {source_data.shape}"
+                    )
+                source_dataset = h5.create_dataset(
+                    "source_data", data=source_data, chunks=data_chunks,
+                    compression="gzip", compression_opts=4,
+                )
+                source_dataset.attrs["dimensions"] = (
+                    "source, component_xyz, time"
+                    if source_data.ndim == 3 else "source, time"
+                )
+                if source_data.ndim == 3:
+                    source_dataset.attrs["vector_components"] = "x,y,z"
+                h5.create_dataset("times_seconds", data=times, compression="gzip")
+                h5.create_dataset("source_vertices", data=source_vertices)
+                h5.create_dataset(
+                    "source_coordinates_m", data=source_coordinates_m,
+                    compression="gzip",
+                )
+                source_orientation_basis = getattr(stc, "source_nn", None)
+                if source_orientation_basis is not None:
+                    h5.create_dataset(
+                        "source_orientation_basis",
+                        data=np.asarray(source_orientation_basis, dtype=np.float32),
+                        compression="gzip",
+                    )
+                h5.create_dataset(
+                    "channel_names",
+                    data=np.asarray(raw.ch_names, dtype=h5py.string_dtype("utf-8")),
+                )
+                h5.create_dataset(
+                    "bad_channels",
+                    data=np.asarray(raw.info.get("bads", []), dtype=h5py.string_dtype("utf-8")),
+                )
+
+            progress.setValue(5)
+            progress.close()
+            QMessageBox.information(
+                self,
+                "Dynamic LORETA Saved",
+                "Continuous sLORETA source estimates saved successfully.\n\n"
+                f"File: {output}\n"
+                f"Source locations: {source_data.shape[0]:,}\n"
+                f"Time samples: {source_data.shape[-1]:,}\n"
+                f"Sampling rate: {raw.info['sfreq']:g} Hz\n\n"
+                "No cortical visualization was generated.",
+            )
+            self.status.showMessage(f"Dynamic sLORETA saved: {output.name}")
+
+        except Exception as exc:
+            progress.close()
+            traceback.print_exc()
+            QMessageBox.critical(
+                self, "Dynamic LORETA Error", f"{type(exc).__name__}: {exc}"
+            )
 
     def update_view(self, *_):
         requested_age = self.age_slider.value()
