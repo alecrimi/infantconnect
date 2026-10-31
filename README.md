@@ -46,14 +46,14 @@ python edf_loreta_cli.py rec.edf --age 12 --no-surface      # tables and JSON on
 
 The scalp and EEG electrode positions are shown in 3D.
 
-![EEG electrodes on the infant scalp](EEG_electrodes.png)
+![EEG electrodes](https://raw.githubusercontent.com/alecrimi/infantconnect/main/EEG_electrodes.png)
 
 ### Brain tractography and electrode overlay
 
 Example screenshot showing the brain tractography together with the EEG electrode overlay.
 
-![Brain tractography overlaid with EEG electrodes](tracts.png)
- 
+![Brain tractography overlaid with EEG electrodes](https://raw.githubusercontent.com/alecrimi/infantconnect/main/tracts.png)
+
 ## Repository files
 
 - `infant_brain_viewer.py` — main interactive 3D viewer and application entry point.
@@ -83,6 +83,10 @@ The cortical surfaces should be prepared with `generate_cortex.py`, and the trac
 - Python packages listed in `requirements.txt`.
 
 ## Installation
+
+```bash
+pip install infant
+```
 
 Clone the repository and enter its directory:
 
