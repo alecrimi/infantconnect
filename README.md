@@ -85,7 +85,7 @@ The cortical surfaces should be prepared with `generate_cortex.py`, and the trac
 ## Installation
 
 ```bash
-pip install infant
+pip install infant-brain-viewer
 ```
 
 Clone the repository and enter its directory:
