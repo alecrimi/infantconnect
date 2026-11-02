@@ -18,13 +18,14 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QSlider, QComboBox, QMessageBox, QCheckBox, QProgressDialog,
-    QFileDialog, QPushButton,
+    QFileDialog, QPushButton, QRadioButton, QButtonGroup, QFrame,
 )
 
 from effconn import compute_effective_connectivity
 from bundle_animation import BundleAnimationMixin
 from edf_quality import show_edf_quality_dialog
 from edf_preprocess import show_edf_preprocess_dialog
+from parcellation import ParcellationStore
 
 ROOT = Path(__file__).resolve().parent
 MANIFEST = ROOT / "atlas.json"
@@ -65,6 +66,8 @@ SURFACE_TYPES = {
     "Inner surface": "inner",
     "Inflated surface": "inflated",
 }
+
+
 
 
 def load_surface(relative_path):
@@ -324,6 +327,9 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         self.tract_cache = {}
         self.tract_load_errors = {}
 
+        self.parcellation = ParcellationStore(ROOT / "parcellation")
+        self._parc_note = ""
+
         self.loreta_data = None
         self.connectome_data = None
         self.loreta_file = None
@@ -336,6 +342,12 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         self.effconn_method = None
 
         self._saved_camera = None
+        self._roi_pick_info = {}
+        self._roi_picker = vtk.vtkPointPicker()
+        self._roi_picker.SetTolerance(0.015)
+        self._roi_picker.PickFromListOn()
+        self._selected_roi_actor = None
+        self._selected_roi = None
 
         self.anim_timer = QTimer(self)
         self.anim_timer.timeout.connect(self._animate_step)
@@ -414,7 +426,6 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         controls.addWidget(self.animate_checkbox)
 
         self.loreta_checkbox = QPushButton("Static LORETA")
-        self.loreta_checkbox.setChecked(False)
         controls.addWidget(self.loreta_checkbox)
 
         self.connectome_checkbox = QCheckBox("Show Connectome")
@@ -444,7 +455,24 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         qc_row.addWidget(self.edf_preprocess_button)
 
         qc_row.addStretch(1)
-        
+
+        parc_row = QHBoxLayout()
+        layout.addLayout(parc_row)
+        parc_row.addWidget(QLabel("Parcellation:"))
+
+        self.parc_group = QButtonGroup(self)
+        self.parc_off = QRadioButton("Off")
+        self.parc_edges = QRadioButton("Infant AAL boundaries")
+        self.parc_fill = QRadioButton("Infant AAL filled")
+        for i, rb in enumerate((self.parc_off, self.parc_edges, self.parc_fill)):
+            self.parc_group.addButton(rb, i)
+            parc_row.addWidget(rb)
+        self.parc_off.setChecked(True)
+        if not self.parcellation.available:
+            for rb in (self.parc_edges, self.parc_fill):
+                rb.setEnabled(False)
+                rb.setToolTip("Run prepare_infant_aal.py first (no parcellation/ folder found)")
+        parc_row.addStretch(1)
 
         eff_row = QHBoxLayout()
         layout.addLayout(eff_row)
@@ -489,6 +517,40 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         self.screenshot_button = QPushButton("Save as screenshot")
         view_row.addWidget(self.screenshot_button)
 
+
+        # Dedicated ROI information panel. Keep this separate from the status
+        # bar, which is reserved for the application's view/configuration summary.
+        self.roi_panel = QFrame()
+        self.roi_panel.setObjectName("roiInfoPanel")
+        self.roi_panel.setMinimumHeight(94)
+        self.roi_panel.setMaximumHeight(118)
+        self.roi_panel.setStyleSheet(
+            "QFrame#roiInfoPanel { background: #303B49; "
+            "border: 1px solid #526273; border-radius: 7px; }"
+        )
+        roi_panel_layout = QVBoxLayout(self.roi_panel)
+        roi_panel_layout.setContentsMargins(16, 9, 16, 9)
+        roi_panel_layout.setSpacing(4)
+
+        self.roi_info_title = QLabel("INFANT AAL · REGION INFORMATION")
+        self.roi_info_title.setStyleSheet(
+            "QLabel { color: #9FB3C8; font-size: 10pt; font-weight: bold; "
+            "background: transparent; border: none; }"
+        )
+        roi_panel_layout.addWidget(self.roi_info_title)
+
+        self.roi_info_label = QLabel(
+            "Select Infant AAL boundaries or filled mode, then click a cortical region."
+        )
+        self.roi_info_label.setWordWrap(True)
+        self.roi_info_label.setMinimumHeight(42)
+        self.roi_info_label.setStyleSheet(
+            "QLabel { color: #F2F2F2; font-size: 15pt; font-weight: 600; "
+            "background: transparent; border: none; padding: 1px 0; }"
+        )
+        roi_panel_layout.addWidget(self.roi_info_label)
+        layout.addWidget(self.roi_panel)
+
     def _connect_signals(self):
         self.age_slider.valueChanged.connect(self.update_view)
         self.age_slider.sliderMoved.connect(self._update_age_label)
@@ -499,7 +561,7 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         self.electrodes_checkbox.toggled.connect(self.update_view)
         self.tracts_checkbox.toggled.connect(self.update_view)
         self.animate_checkbox.toggled.connect(self.update_view)
-        self.loreta_checkbox.toggled.connect(self.on_loreta_toggled)
+        self.loreta_checkbox.clicked.connect(self.on_loreta_toggled)
         self.connectome_checkbox.toggled.connect(self.update_view)
         self.dynamic_loreta_button.clicked.connect(self.on_dynamic_loreta_clicked)
         self.screenshot_button.clicked.connect(self.save_screenshot)
@@ -511,6 +573,7 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
             lambda: show_edf_preprocess_dialog(self)
         )
 
+        self.parc_group.idClicked.connect(self.update_view)
         self.effconn_checkbox.toggled.connect(self.on_effconn_toggled)
         self.effconn_combo.currentIndexChanged.connect(self.on_effconn_method_changed)
         self.effconn_change_file_btn.clicked.connect(self._change_effconn_file)
@@ -519,6 +582,110 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         self.coronal_button.clicked.connect(lambda: self._set_view("coronal"))
         self.sagittal_button.clicked.connect(lambda: self._set_view("sagittal"))
 
+        # Restrict left-click picking to the cortical surface actors registered
+        # in update_view; other overlays (scalp, tracts, electrodes) are ignored.
+        self.plotter.enable_point_picking(
+            callback=self._on_roi_picked,
+            picker=self._roi_picker,
+            use_picker=True,
+            left_clicking=True,
+            right_clicking=False,
+            show_message=False,
+            show_point=False,
+            clear_on_no_selection=False,
+        )
+
+    @staticmethod
+    def _vtk_actor_key(actor):
+        if actor is None:
+            return None
+        try:
+            return actor.GetAddressAsString("")
+        except Exception:
+            return str(actor)
+
+    def _on_roi_picked(self, point, picker=None):
+        """Resolve a picked cortical point to its per-vertex Infant-AAL label."""
+        try:
+            picker = picker or self._roi_picker
+            actor = picker.GetActor()
+            info = self._roi_pick_info.get(self._vtk_actor_key(actor))
+            if info is None:
+                return
+
+            point_id = int(picker.GetPointId()) if hasattr(picker, "GetPointId") else -1
+            mesh = info["mesh"]
+            labels = info["labels"]
+            if point_id < 0 or point_id >= len(labels):
+                picked = point if point is not None else picker.GetPickPosition()
+                picked = np.asarray(picked, dtype=float).reshape(1, 3)
+                _, point_id = info["tree"].query(picked[0])
+            point_id = int(point_id)
+            label = int(labels[point_id])
+            hemi = info["hemi"]
+
+            if label <= 0:
+                self.roi_info_label.setText(
+                    f"{hemi.title()} hemisphere · Unlabelled cortical point "
+                    "(outside Infant AAL coverage)"
+                )
+                self._remove_selected_roi_highlight()
+                return
+
+            region = self.parcellation.get_region_info(label)
+            if region is None:
+                return
+            acronym = region["acronym"]
+            full_name = region["full_name"]
+            hemi_name = "Left" if hemi == "left" else "Right"
+            message = (
+                f"{acronym} — {full_name} ({hemi_name} hemisphere)  |  "
+                f"Infant AAL ROI {label}"
+            )
+            self.roi_info_label.setText(message)
+            self._highlight_selected_roi(hemi, mesh, labels, label)
+            self._selected_roi = (hemi, label)
+        except Exception as exc:
+            print(f"ROI picking failed: {type(exc).__name__}: {exc}")
+
+    def _remove_selected_roi_highlight(self):
+        try:
+            self.plotter.remove_actor("selected_roi_boundary", reset_camera=False, render=False)
+        except Exception:
+            pass
+        self._selected_roi_actor = None
+        self._selected_roi = None
+        self.plotter.render()
+
+    def _highlight_selected_roi(self, hemi, mesh, labels, label):
+        """Draw a bright outline around the clicked ROI without hiding LORETA."""
+        self._remove_selected_roi_highlight()
+        try:
+            tri = mesh if mesh.is_all_triangles else mesh.triangulate()
+            faces = np.asarray(tri.faces).reshape(-1, 4)[:, 1:]
+            edges = np.concatenate((
+                faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]
+            ), axis=0)
+            edges = np.sort(edges, axis=1)
+            is_roi = labels[edges] == int(label)
+            border = np.logical_xor(is_roi[:, 0], is_roi[:, 1])
+            edges = np.unique(edges[border], axis=0)
+            if not len(edges):
+                return
+
+            points = self.parcellation._offset_points(mesh, 0.0035)
+            used, inverse = np.unique(edges.ravel(), return_inverse=True)
+            segments = inverse.reshape(-1, 2)
+            lines = np.column_stack((np.full(len(segments), 2), segments)).ravel()
+            boundary = pv.PolyData(points[used], lines=lines)
+            self._selected_roi_actor = self.plotter.add_mesh(
+                boundary, color="#00E5FF", line_width=4.0,
+                render_lines_as_tubes=True, lighting=False,
+                reset_camera=False, name="selected_roi_boundary",
+            )
+            self.plotter.render()
+        except Exception as exc:
+            print(f"ROI highlight failed: {type(exc).__name__}: {exc}")
 
     def _update_age_label(self, value):
         self.age_label.setText(f"{int(value)} months")
@@ -870,6 +1037,26 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
             name="effconn_arrows",
         )
 
+    def _add_parcellation(self, age, hemi, mesh, mode):
+        store = self.parcellation
+        if mode == 2:
+            fill = store.filled_mesh(mesh, age, hemi)
+            if fill is not None:
+                self.plotter.add_mesh(
+                    fill, scalars="aal_rgb", rgb=True, opacity=0.45,
+                    lighting=False, show_scalar_bar=False,
+                    reset_camera=False, name=f"aal_fill_{hemi}",
+                )
+        edges = store.boundary_mesh(mesh, age, hemi)
+        if edges is not None:
+            self.plotter.add_mesh(
+                edges, color="#111111", line_width=1.5, lighting=False,
+                reset_camera=False, name=f"aal_edges_{hemi}",
+            )
+            self._parc_note = f"Infant AAL ({store.source_volume(age)} labels)"
+        elif store.last_error:
+            print(f"Parcellation not drawn: {store.last_error}")
+
     def _nearest_age(self, requested_age):
         return min(self.available_ages, key=lambda a: abs(a - requested_age))
 
@@ -1000,15 +1187,7 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
             color=(0.78, 0.84, 1.0), intensity=0.30,
         ))
 
-    def on_loreta_toggled(self, checked):
-        if not checked:
-            self.loreta_data = None
-            self.connectome_data = None
-            self.loreta_file = None
-            self.loreta_raw = None
-            self.update_view()
-            return
-
+    def on_loreta_toggled(self):
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Select EEG File",
@@ -1018,7 +1197,6 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         )
 
         if not file_path:
-            self.loreta_checkbox.setChecked(False)
             return
 
         self.loreta_file = file_path
@@ -1032,7 +1210,6 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         def canceled():
             if progress.wasCanceled():
                 progress.close()
-                self.loreta_checkbox.setChecked(False)
                 return True
             return False
 
@@ -1216,7 +1393,6 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
             progress.close()
             traceback.print_exc()
             QMessageBox.critical(self, "LORETA Error", f"{type(exc).__name__}: {exc}")
-            self.loreta_checkbox.setChecked(False)
 
     def on_dynamic_loreta_clicked(self):
         """Compute continuous sLORETA source time series and export to HDF5.
@@ -1494,12 +1670,31 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         show_animate = self.animate_checkbox.isChecked()
         show_connectome = self.connectome_checkbox.isChecked()
         show_effconn = self.effconn_checkbox.isChecked()
+        parc_mode = self.parc_group.checkedId()   # 0 off, 1 boundaries, 2 filled
+        self._parc_note = ""
         effconn_active = show_effconn and self.effconn_matrix is not None
 
         self.anim_timer.stop()
         self.anim_pulses.clear()
 
         self.plotter.clear()
+        self._roi_pick_info.clear()
+        try:
+            self._roi_picker.InitializePickList()
+            self._roi_picker.PickFromListOn()
+        except Exception:
+            pass
+        self._selected_roi_actor = None
+        self._selected_roi = None
+        if hasattr(self, "roi_info_label"):
+            if parc_mode:
+                self.roi_info_label.setText(
+                    "Click a cortical region to display its acronym, anatomical name and hemisphere."
+                )
+            else:
+                self.roi_info_label.setText(
+                    "Enable Infant AAL boundaries or filled mode, then click a cortical region."
+                )
         self._configure_lighting()
 
         try:
@@ -1514,7 +1709,10 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
                     loreta_opacity = 0.80
 
                 if effconn_active:
-                    brain_opacity = 0.20
+                    # Use a neutral, clearly visible cortex while displaying
+                    # effective-connectivity arrows. Keep LORETA data loaded,
+                    # but temporarily hide its heatmap to avoid visual clutter.
+                    brain_opacity = 0.88
                 elif show_tracts or self.loreta_data is not None:
                     brain_opacity = 0.30
                 else:
@@ -1525,7 +1723,7 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
                     if mesh is None:
                         continue
 
-                    if self.loreta_data is not None:
+                    if self.loreta_data is not None and not effconn_active:
                         tree = self.loreta_data["tree"]
                         power = self.loreta_data["power"]
                         max_power = self.loreta_data["max_power"]
@@ -1539,7 +1737,7 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
 
                         mesh["loreta_power"] = np.nan_to_num(power_vals, nan=0.0, posinf=0.0, neginf=0.0)
 
-                        self.plotter.add_mesh(
+                        surface_actor = self.plotter.add_mesh(
                             mesh,
                             scalars="loreta_power",
                             cmap="hot",
@@ -1570,20 +1768,43 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
                                 wire, style="wireframe", color="black",
                                 line_width=1.0, lighting=False, reset_camera=False,
                             )
+                            # Invisible full-resolution surface used only for ROI picking.
+                            surface_actor = self.plotter.add_mesh(
+                                mesh, color="#FFFFFF", opacity=0.001,
+                                lighting=False, reset_camera=False,
+                                name=f"roi_pick_surface_{hemi}",
+                            )
                         elif rendering == "Flat":
-                            self.plotter.add_mesh(
+                            surface_actor = self.plotter.add_mesh(
                                 mesh, color="#9DBBD2", smooth_shading=False,
                                 opacity=brain_opacity,
                                 lighting=True, ambient=0.22, diffuse=0.78,
                                 specular=0.12, specular_power=18, reset_camera=False,
                             )
                         else:
-                            self.plotter.add_mesh(
+                            surface_actor = self.plotter.add_mesh(
                                 mesh, color="#9DBBD2", smooth_shading=True,
                                 opacity=brain_opacity,
                                 lighting=True, ambient=0.20, diffuse=0.78,
                                 specular=0.24, specular_power=28, reset_camera=False,
                             )
+
+                    if parc_mode in (1, 2):
+                        labels = self.parcellation.get_labels(age, hemi, mesh.n_points)
+                        if labels is not None:
+                            self._roi_pick_info[self._vtk_actor_key(surface_actor)] = {
+                                "hemi": hemi,
+                                "mesh": mesh,
+                                "labels": labels,
+                                "tree": cKDTree(np.asarray(mesh.points, dtype=float)),
+                            }
+                            try:
+                                self._roi_picker.AddPickList(surface_actor)
+                            except Exception:
+                                pass
+
+                    if parc_mode:
+                        self._add_parcellation(age, hemi, mesh, parc_mode)
 
                 if show_tracts:
                     try:
@@ -1673,6 +1894,8 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
                     extras.append("connectome")
                 if show_effconn and self.effconn_matrix is not None:
                     extras.append(f"eff.conn({self.effconn_method})")
+                if self._parc_note:
+                    extras.append(self._parc_note)
                 if show_axes:
                     extras.append("axes")
                 if extras:
