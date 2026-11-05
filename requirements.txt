@@ -9,6 +9,7 @@ scipy
 PySide6
 nibabel
 edfio
+mcp[cli]>=1.28,<2
 
 # The script imports `compute_effective_connectivity` from `effconn`.
 # If `effconn` is a local effconn.py file in your project, keep that file
