@@ -18,9 +18,10 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QSlider, QComboBox, QMessageBox, QCheckBox, QProgressDialog,
-    QFileDialog, QPushButton, QRadioButton, QButtonGroup, QFrame,
+    QFileDialog, QPushButton, QRadioButton, QButtonGroup, QFrame, QSplitter,
 )
 
+from eeg_trace_panel import EEGTracePanel
 from effconn import compute_effective_connectivity
 from bundle_animation import BundleAnimationMixin
 from edf_quality import show_edf_quality_dialog
@@ -501,7 +502,18 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
 
         self.plotter = QtInteractor(central)
         self.plotter.set_background("#202833")
-        layout.addWidget(self.plotter.interactor, stretch=1)
+
+        # EEG time series (left) | 3D view (right). The trace panel stays
+        # hidden until an EDF has been processed with Static LORETA.
+        self.eeg_panel = EEGTracePanel()
+        self.eeg_panel.setVisible(False)
+        self.view_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.view_splitter.addWidget(self.eeg_panel)
+        self.view_splitter.addWidget(self.plotter.interactor)
+        self.view_splitter.setStretchFactor(0, 1)
+        self.view_splitter.setStretchFactor(1, 2)
+        self.view_splitter.setCollapsible(1, False)
+        layout.addWidget(self.view_splitter, stretch=1)
 
         view_row = QHBoxLayout()
         layout.addLayout(view_row)
@@ -687,6 +699,19 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         except Exception as exc:
             print(f"ROI highlight failed: {type(exc).__name__}: {exc}")
 
+    def _show_eeg_panel(self, raw, file_path=None):
+        """Show `raw` in the EEG trace panel to the left of the 3D view."""
+        if raw is None:
+            return
+        name = Path(file_path).name if file_path else ""
+        self.eeg_panel.set_raw(
+            raw, title=f"EEG time series — {name}" if name else "EEG time series"
+        )
+        if not self.eeg_panel.isVisible():
+            self.eeg_panel.setVisible(True)
+            total_w = max(self.view_splitter.width(), 900)
+            self.view_splitter.setSizes([int(total_w * 0.35), int(total_w * 0.65)])
+
     def _update_age_label(self, value):
         self.age_label.setText(f"{int(value)} months")
 
@@ -825,6 +850,7 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         self.effconn_source_file = file_path
         self.effconn_matrix = None
         self.effconn_nodes = None
+        self._show_eeg_panel(raw, file_path)
         return True
 
     def on_effconn_toggled(self, checked):
@@ -839,9 +865,13 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
                 self.effconn_source_file = self.loreta_file
                 self.effconn_matrix = None
                 self.effconn_nodes = None
+                self._show_eeg_panel(self.effconn_raw, self.effconn_source_file)
             elif not self._ask_effconn_file():
                 self.effconn_checkbox.setChecked(False)
                 return
+        else:
+            # Re-sync in case another workflow replaced the displayed series.
+            self._show_eeg_panel(self.effconn_raw, self.effconn_source_file)
 
         method = (
             "granger"
@@ -897,6 +927,7 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         self.effconn_source_file = file_path
         self.effconn_matrix = None
         self.effconn_nodes = None
+        self._show_eeg_panel(raw, file_path)
 
         if self.effconn_checkbox.isChecked():
             method = (
@@ -1384,6 +1415,10 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
                 self.connectome_data = {"ch_corr": ch_corr, "nodes": nodes_3d}
 
                 self.loreta_raw = raw
+
+                # Show the loaded time series (channels labelled by sensor)
+                # to the left of the 3D view.
+                self._show_eeg_panel(raw, file_path)
 
                 progress.setValue(5)
                 progress.close()
