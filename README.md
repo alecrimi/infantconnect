@@ -8,9 +8,11 @@ A Python desktop application for visualizing infant brain surfaces from 1 to 72 
 - Infant scalp and skull geometry with EEG electrode locations.
 - Age/template selection for infant head geometry.
 - Overlay of electrodes and tractography for spatial inspection.
+- LORETA analysis for source localization inspectioning the time series.
 - Optional effective-connectivity analysis using **Granger causality** or **transfer entropy** from EEG data.
 - Loading of local atlas and surface files from the repository.
 - It can perform quality check and pre-processing of .edf files
+- Connection to MCP server for automation via Langgraph, Claude and ChatGPT
 - Canonical views as axial, sagittal, coronal and automatic saving of the scene.
 
 ## Instructions
