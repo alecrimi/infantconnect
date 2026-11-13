@@ -580,6 +580,8 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         self.loreta_checkbox.clicked.connect(self.on_loreta_toggled)
         self.connectome_checkbox.toggled.connect(self.update_view)
         self.dynamic_loreta_button.clicked.connect(self.on_dynamic_loreta_clicked)
+        self.eeg_panel.refineRequested.connect(self.on_loreta_refine_requested)
+        self.eeg_panel.resetRequested.connect(self.on_loreta_reset_requested)
         self.screenshot_button.clicked.connect(self.save_screenshot)
 
         self.edf_quality_button.clicked.connect(
@@ -717,6 +719,7 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         """Show `raw` in the EEG trace panel to the left of the 3D view."""
         if raw is None:
             return
+        self._eeg_panel_raw = raw
         name = Path(file_path).name if file_path else ""
         self.eeg_panel.set_raw(
             raw, title=f"EEG time series — {name}" if name else "EEG time series"
@@ -1363,23 +1366,14 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
                     raw.info, fwd, cov, loose=1.0, depth=0.8, verbose=False
                 )
 
-                try:
-                    stc = mne.minimum_norm.apply_inverse_raw(
-                        raw, inv, lambda2=0.1, method="dSPM", verbose=False
-                    )
-                except Exception as e:
-                    print(f"dSPM failed: {e}. Using MNE with high regularization.")
-                    stc = mne.minimum_norm.apply_inverse_raw(
-                        raw, inv, lambda2=10.0, method="MNE", verbose=False
-                    )
+                stc = self._apply_static_inverse(raw, inv)
 
                 progress.setValue(3)
                 QApplication.processEvents()
                 if canceled():
                     return
 
-                stc.data = np.nan_to_num(stc.data, nan=0.0, posinf=0.0, neginf=0.0)
-                source_power = stc.data.max(axis=1)
+                source_power = self._source_power(stc)
 
                 ref_parts = [
                     m for m in (self._get_mesh(age, h, "outer") for h in ("left", "right"))
@@ -1415,13 +1409,7 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
                 progress.setLabelText("Computing connectivity...")
                 QApplication.processEvents()
 
-                ch_data = raw.get_data()
-                n_samples = ch_data.shape[1]
-                std_dev = ch_data.std(axis=1, keepdims=True)
-                std_dev[std_dev == 0] = 1e-12
-                ch_data = (ch_data - ch_data.mean(axis=1, keepdims=True)) / std_dev
-                ch_corr = np.dot(ch_data, ch_data.T) / max(n_samples, 1)
-                ch_corr = np.nan_to_num(ch_corr, nan=0.0, posinf=0.0, neginf=0.0)
+                ch_corr = self._channel_correlation(raw)
 
                 _, electrodes_fit = fit_template_to_brain(scalp, electrode_positions, reference)
                 nodes_3d = np.array([electrodes_fit[ch] for ch in raw.ch_names])
@@ -1429,6 +1417,15 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
                 self.connectome_data = {"ch_corr": ch_corr, "nodes": nodes_3d}
 
                 self.loreta_raw = raw
+
+                # Keep everything needed to re-run the estimate on a sub-span.
+                self._loreta_ctx = {
+                    "inv": inv,
+                    "tree": tree,
+                    "nodes": nodes_3d,
+                    "full_loreta": self.loreta_data,
+                    "full_connectome": self.connectome_data,
+                }
 
                 # Show the loaded time series (channels labelled by sensor)
                 # to the left of the 3D view.
@@ -1442,6 +1439,97 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
             progress.close()
             traceback.print_exc()
             QMessageBox.critical(self, "LORETA Error", f"{type(exc).__name__}: {exc}")
+
+    # ---------------------------------------------- static LORETA refinement
+    @staticmethod
+    def _apply_static_inverse(raw, inv, start=0, stop=None):
+        """dSPM on raw[start:stop] (sample indices); falls back to MNE."""
+        try:
+            return mne.minimum_norm.apply_inverse_raw(
+                raw, inv, lambda2=0.1, method="dSPM",
+                start=start, stop=stop, verbose=False,
+            )
+        except Exception as e:
+            print(f"dSPM failed: {e}. Using MNE with high regularization.")
+            return mne.minimum_norm.apply_inverse_raw(
+                raw, inv, lambda2=10.0, method="MNE",
+                start=start, stop=stop, verbose=False,
+            )
+
+    @staticmethod
+    def _source_power(stc):
+        stc.data = np.nan_to_num(stc.data, nan=0.0, posinf=0.0, neginf=0.0)
+        return stc.data.max(axis=1)
+
+    @staticmethod
+    def _channel_correlation(raw, start=0, stop=None):
+        ch_data = raw.get_data(start=start, stop=stop)
+        n_samples = ch_data.shape[1]
+        std_dev = ch_data.std(axis=1, keepdims=True)
+        std_dev[std_dev == 0] = 1e-12
+        ch_data = (ch_data - ch_data.mean(axis=1, keepdims=True)) / std_dev
+        ch_corr = np.dot(ch_data, ch_data.T) / max(n_samples, 1)
+        return np.nan_to_num(ch_corr, nan=0.0, posinf=0.0, neginf=0.0)
+
+    def on_loreta_refine_requested(self, t_start, t_end):
+        """Recompute the static LORETA map on a user-selected time span."""
+        ctx = getattr(self, "_loreta_ctx", None)
+        raw = self.loreta_raw
+        if ctx is None or raw is None:
+            return
+        if getattr(self, "_eeg_panel_raw", None) is not raw:
+            QMessageBox.information(
+                self, "LORETA",
+                "The trace panel is showing a different recording than the one "
+                "used for Static LORETA. Run Static LORETA on this file first.",
+            )
+            return
+        start = int(round(t_start * raw.info["sfreq"]))
+        stop = int(round(t_end * raw.info["sfreq"]))
+        start = max(0, start)
+        stop = min(raw.n_times, stop)
+        if stop - start < 2:
+            QMessageBox.warning(self, "LORETA", "The selected time range is too short.")
+            return
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        self.status.showMessage(f"Computing LORETA for {t_start:.2f}–{t_end:.2f} s...")
+        QApplication.processEvents()
+        try:
+            with np.errstate(divide="ignore", invalid="ignore"):
+                stc = self._apply_static_inverse(raw, ctx["inv"], start, stop)
+                power = self._source_power(stc)
+                max_p = float(power.max())
+                if not np.isfinite(max_p) or max_p == 0:
+                    max_p = 1e-12
+                self.loreta_data = {
+                    "tree": ctx["tree"], "power": power, "max_power": max_p,
+                }
+                self.connectome_data = {
+                    "ch_corr": self._channel_correlation(raw, start, stop),
+                    "nodes": ctx["nodes"],
+                }
+            self.eeg_panel.set_applied_window((start / raw.info["sfreq"],
+                                               stop / raw.info["sfreq"]))
+            self.update_view()
+            self.status.showMessage(
+                f"LORETA refined on {t_start:.2f}–{t_end:.2f} s", 5000
+            )
+        except Exception as exc:
+            traceback.print_exc()
+            QMessageBox.critical(self, "LORETA Error", f"{type(exc).__name__}: {exc}")
+        finally:
+            QApplication.restoreOverrideCursor()
+
+    def on_loreta_reset_requested(self):
+        """Go back to the LORETA map computed on the full recording."""
+        ctx = getattr(self, "_loreta_ctx", None)
+        if ctx is None:
+            return
+        self.loreta_data = ctx["full_loreta"]
+        self.connectome_data = ctx["full_connectome"]
+        self.update_view()
+        self.status.showMessage("LORETA: full recording", 5000)
 
     def on_dynamic_loreta_clicked(self):
         """Compute continuous sLORETA source time series and export to HDF5.
