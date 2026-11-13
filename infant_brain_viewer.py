@@ -499,6 +499,10 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         eff_row.addWidget(self.effconn_status_label)
 
         eff_row.addStretch(1)
+        
+        self.about_button = QPushButton("About")
+        self.about_button.setToolTip("Show software information")
+        eff_row.addWidget(self.about_button)
 
         self.plotter = QtInteractor(central)
         self.plotter.set_background("#202833")
@@ -589,6 +593,16 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         self.effconn_checkbox.toggled.connect(self.on_effconn_toggled)
         self.effconn_combo.currentIndexChanged.connect(self.on_effconn_method_changed)
         self.effconn_change_file_btn.clicked.connect(self._change_effconn_file)
+        
+        self.about_button.clicked.connect(
+            lambda: QMessageBox.about(
+                self,
+                "About",
+                "Software made by Alessandro Crimi, "
+                "AGH University of Krakow, Poland.\n\n"
+                "License Apache v.2",
+            )
+        )
         
         self.axial_button.clicked.connect(lambda: self._set_view("axial"))
         self.coronal_button.clicked.connect(lambda: self._set_view("coronal"))
