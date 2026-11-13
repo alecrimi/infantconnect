@@ -192,6 +192,72 @@ def mesh_qc(path: Path) -> dict[str, Any]:
         return row
 
 
+def audit_all_mesh_files(mesh_root: Path) -> list[dict[str, Any]]:
+    """Audit every VTK mesh recursively, independently of atlas.json."""
+    files = sorted(mesh_root.rglob("*.vtk"))
+    rows = []
+
+    for path in files:
+        qc = mesh_qc(path)
+        rows.append({
+            "asset_path": str(path.relative_to(mesh_root)),
+            **qc
+        })
+
+    return rows
+
+
+def geometric_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Calculate geometric statistics across successfully processed meshes."""
+
+    valid = [
+        r for r in rows
+        if r.get("status") in ("PASS", "WARN")
+        and all(r.get(k) is not None for k in (
+            "bounds_xmin", "bounds_xmax",
+            "bounds_ymin", "bounds_ymax",
+            "bounds_zmin", "bounds_zmax"
+        ))
+    ]
+
+    if not valid:
+        return {
+            "assets_processed_successfully": 0,
+            "assets_with_detected_errors": len(rows),
+            "median_extent_x": None,
+            "median_extent_y": None,
+            "median_extent_z": None,
+            "maximum_extent_ratio": None,
+        }
+
+    extents = np.asarray([
+        [
+            r["bounds_xmax"] - r["bounds_xmin"],
+            r["bounds_ymax"] - r["bounds_ymin"],
+            r["bounds_zmax"] - r["bounds_zmin"],
+        ]
+        for r in valid
+    ], dtype=float)
+
+    medians = np.median(extents, axis=0)
+
+    ratios = np.divide(
+        extents,
+        medians,
+        out=np.full_like(extents, np.nan),
+        where=medians != 0
+    )
+
+    return {
+        "assets_processed_successfully": len(valid),
+        "assets_with_detected_errors": len(rows) - len(valid),
+        "median_extent_x": float(medians[0]),
+        "median_extent_y": float(medians[1]),
+        "median_extent_z": float(medians[2]),
+        "maximum_extent_ratio": float(np.nanmax(ratios)),
+    }
+
+
 def discover_surface_files(root: Path) -> dict[tuple[str, str, str], str]:
     """Discover VTK files based on the known filename convention."""
     found: dict[tuple[str, str, str], str] = {}
@@ -330,16 +396,33 @@ def write_summary_plot(rows: list[dict[str, Any]], output_path: Path) -> bool:
     return True
 
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent,
-                        help="Project directory containing atlas.json and age folders.")
-    parser.add_argument("--manifest", type=Path, default=None,
-                        help="Manifest path (default: ROOT/atlas.json).")
-    parser.add_argument("--out", type=Path, default=None,
-                        help="Output directory (default: ROOT/qc).")
-    parser.add_argument("--include-sphere", action="store_true",
-                        help="Include sphere surfaces in the audit (default: yes if in manifest).")
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=Path(__file__).resolve().parent,
+        help="Project directory containing atlas.json and age folders."
+    )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=None,
+        help="Manifest path (default: ROOT/atlas.json)."
+    )
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output directory (default: ROOT/qc)."
+    )
+    parser.add_argument(
+        "--include-sphere",
+        action="store_true",
+        help="Include sphere surfaces in the audit (default: yes if in manifest)."
+    )
+
     args = parser.parse_args()
 
     root = args.root.resolve()
@@ -347,69 +430,225 @@ def main() -> int:
     out_dir = (args.out or (root / "qc")).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # ---------------------------------------------------------
+    # Load manifest
+    # ---------------------------------------------------------
     if not manifest_path.is_file():
-        print(f"ERROR: manifest not found: {manifest_path}", file=sys.stderr)
+        print(
+            f"ERROR: manifest not found: {manifest_path}",
+            file=sys.stderr
+        )
         return 2
 
     try:
         manifest = load_manifest(root, manifest_path)
     except Exception as exc:
-        print(f"ERROR: cannot read manifest: {exc}", file=sys.stderr)
+        print(
+            f"ERROR: cannot read manifest: {exc}",
+            file=sys.stderr
+        )
         return 2
 
-    discovered = discover_surface_files(root / "data")
+    # ---------------------------------------------------------
+    # Locate physical mesh assets
+    # ---------------------------------------------------------
+    mesh_root = root / "data" if (root / "data").is_dir() else root
+
+    discovered = discover_surface_files(mesh_root)
+
+    # ---------------------------------------------------------
+    # 1. Manifest audit (e.g. 110 entries)
+    # ---------------------------------------------------------
     surfaces = DEFAULT_SURFACES
-    rows = build_manifest_rows(root, manifest, discovered, surfaces)
 
+    manifest_rows = build_manifest_rows(
+        root,
+        manifest,
+        discovered,
+        surfaces
+    )
+
+    manifest_counts = Counter(
+        r.get("status", "ERROR") for r in manifest_rows
+    )
+
+    # ---------------------------------------------------------
+    # 2. Independent physical asset audit (e.g. 889 files)
+    # ---------------------------------------------------------
+    asset_rows = audit_all_mesh_files(mesh_root)
+
+    asset_counts = Counter(
+        r.get("status", "ERROR") for r in asset_rows
+    )
+
+    # ---------------------------------------------------------
+    # 3. Aggregate geometric statistics
+    # ---------------------------------------------------------
+    geometry = geometric_summary(asset_rows)
+
+    # ---------------------------------------------------------
+    # 4. Write physical asset CSV
+    # ---------------------------------------------------------
     csv_path = out_dir / "atlas_qc.csv"
+
+    if asset_rows:
+        fieldnames = list(asset_rows[0].keys())
+
+        with csv_path.open(
+            "w",
+            newline="",
+            encoding="utf-8"
+        ) as f:
+            writer = csv.DictWriter(
+                f,
+                fieldnames=fieldnames
+            )
+            writer.writeheader()
+            writer.writerows(asset_rows)
+
+    # ---------------------------------------------------------
+    # 5. Write manifest CSV separately
+    # ---------------------------------------------------------
+    manifest_csv_path = out_dir / "atlas_manifest_qc.csv"
+
+    if manifest_rows:
+        fieldnames = list(manifest_rows[0].keys())
+
+        with manifest_csv_path.open(
+            "w",
+            newline="",
+            encoding="utf-8"
+        ) as f:
+            writer = csv.DictWriter(
+                f,
+                fieldnames=fieldnames
+            )
+            writer.writeheader()
+            writer.writerows(manifest_rows)
+
+    # ---------------------------------------------------------
+    # 6. Write JSON summary
+    # ---------------------------------------------------------
     json_path = out_dir / "atlas_qc.json"
-    png_path = out_dir / "atlas_qc_summary.png"
 
-    fieldnames = list(rows[0].keys()) if rows else []
-    with csv_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-
-    counts = Counter(r.get("status", "ERROR") for r in rows)
     summary = {
         "root": str(root),
         "manifest": str(manifest_path),
-        "entries_audited": len(rows),
-        "status_counts": dict(counts),
+
+        "assets_discovered": len(asset_rows),
+        "assets_processed_successfully":
+            geometry["assets_processed_successfully"],
+        "assets_with_detected_errors":
+            geometry["assets_with_detected_errors"],
+
+        "manifest_entries_audited": len(manifest_rows),
+
+        "asset_status_counts": dict(asset_counts),
+        "manifest_status_counts": dict(manifest_counts),
+
+        "geometry_summary": geometry,
+
         "discovered_files": len(discovered),
+
         "manifest_age_keys": list(manifest.keys()),
+
         "normalized_manifest_ages_months": sorted({
-            normalize_age_key(k) for k in manifest.keys()
+            normalize_age_key(k)
+            for k in manifest.keys()
         }),
+
         "limitations": [
             "These are basic geometric/file-integrity checks, not anatomical validation.",
             "A closed surface or nonzero volume is not guaranteed to be anatomically correct.",
             "Coordinates and units are reported as stored; their meaning must be established from atlas documentation.",
             "Vertex counts across ages do not establish vertex-wise correspondence.",
-            "Sphere meshes are included in the audit but should not be treated as anatomical surfaces.",
+            "Sphere meshes are included in the audit but should not be treated as anatomical surfaces."
         ],
-        "entries": rows,
+
+        "entries": asset_rows
     }
-    with json_path.open("w", encoding="utf-8") as f:
-        json.dump(json_safe(summary), f, indent=2, ensure_ascii=False)
 
-    plot_written = write_summary_plot(rows, png_path)
+    with json_path.open(
+        "w",
+        encoding="utf-8"
+    ) as f:
+        json.dump(
+            json_safe(summary),
+            f,
+            indent=2,
+            ensure_ascii=False
+        )
 
-    print(f"Audited {len(rows)} manifest entries; discovered {len(discovered)} VTK files.")
-    print("Status counts:", dict(counts))
-    print(f"CSV report:  {csv_path}")
-    print(f"JSON report: {json_path}")
+    # ---------------------------------------------------------
+    # 7. Generate QC plot
+    # ---------------------------------------------------------
+    png_path = out_dir / "atlas_qc_summary.png"
+
+    plot_written = write_summary_plot(
+        manifest_rows,
+        png_path
+    )
+
+    # ---------------------------------------------------------
+    # 8. Print results
+    # ---------------------------------------------------------
+    print("\n" + "=" * 60)
+    print("INFANTCONNECT ATLAS QUALITY CONTROL")
+    print("=" * 60)
+
+    print("\nPHYSICAL ASSET AUDIT")
+    print("-" * 40)
+    print(f"Mesh assets discovered:       {len(asset_rows)}")
+    print(
+        "Successfully processed:      "
+        f"{geometry['assets_processed_successfully']}"
+    )
+    print(
+        "Assets with detected errors: "
+        f"{geometry['assets_with_detected_errors']}"
+    )
+    print("Asset status counts:", dict(asset_counts))
+
+    print("\nMANIFEST AUDIT")
+    print("-" * 40)
+    print(f"Manifest entries audited: {len(manifest_rows)}")
+    print("Manifest status counts:", dict(manifest_counts))
+
+    print("\nGEOMETRIC SUMMARY")
+    print("-" * 40)
+    print(
+        f"Median surface extent X: "
+        f"{geometry['median_extent_x']}"
+    )
+    print(
+        f"Median surface extent Y: "
+        f"{geometry['median_extent_y']}"
+    )
+    print(
+        f"Median surface extent Z: "
+        f"{geometry['median_extent_z']}"
+    )
+    print(
+        f"Maximum surface extent ratio: "
+        f"{geometry['maximum_extent_ratio']}"
+    )
+
+    print("\nOUTPUT FILES")
+    print("-" * 40)
+    print(f"Asset CSV:    {csv_path}")
+    print(f"Manifest CSV: {manifest_csv_path}")
+    print(f"JSON report:  {json_path}")
+
     if plot_written:
-        print(f"QC plot:     {png_path}")
+        print(f"QC plot:      {png_path}")
     else:
         print("QC plot skipped (install matplotlib to enable it).")
-    print("\nInterpretation:")
-    print("- ERROR: missing file, unreadable mesh, empty mesh, or invalid coordinates.")
-    print("- WARN: mesh loaded but a basic structural check flagged a potential issue.")
-    print("- PASS: basic checks passed; this is not a certification of anatomical validity.")
-    return 0 if counts.get("ERROR", 0) == 0 else 1
+
+    print("\n" + "=" * 60)
+
+    return 0 if geometry["assets_with_detected_errors"] == 0 else 1
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
+ 
