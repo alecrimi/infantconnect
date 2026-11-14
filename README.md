@@ -8,7 +8,7 @@ A Python desktop application for visualizing infant brain surfaces from 1 to 72 
 - Infant scalp and skull geometry with EEG electrode locations.
 - Age/template selection for infant head geometry.
 - Overlay of electrodes and tractography for spatial inspection.
-- **LORETA** analysis for source localization inspectioning the time series.
+- **LORETA** analysis for source localization inspectioning the time series. This can be for the whole time series or just a selected segment as a seizure.
 - Optional effective-connectivity analysis using **Granger causality** or **transfer entropy** from EEG data.
 - Loading of local atlas and surface files from the repository.
 - It can perform quality check and pre-processing of .edf files
@@ -56,6 +56,12 @@ Example screenshot showing the brain tractography together with the EEG electrod
 
 ![Brain tractography overlaid with EEG electrodes](https://raw.githubusercontent.com/alecrimi/infantconnect/main/tracts.png)
 
+### Brain tractography and electrode overlay
+
+Example screenshot showing the static LORETA localization from a selected interval.
+
+![Loreta](https://raw.githubusercontent.com/alecrimi/infantconnect/main/screenshot5.png) 
+
 ## Repository files
 
 - `infant_brain_viewer.py` — main interactive 3D viewer and application entry point.
@@ -83,6 +89,7 @@ The cortical surfaces should be prepared with `generate_cortex.py`, and the trac
 - Python 3.10 or newer is recommended.
 - A desktop environment capable of running Qt and rendering VTK/PyVista 3D scenes.
 - Python packages listed in `requirements.txt`.
+- Other files (e.g. tractography and cortex atlas are installed at first usage)
 
 ## Installation
 
