@@ -1,66 +1,18 @@
 {
   "1": {
     "left": {
-      "outer": "data/01/SparseAtlas_01_lh.OuterSurf.vtk",
-      "middle": "data/01/SparseAtlas_01_lh.MiddleSurf.vtk",
-      "inner": "data/01/SparseAtlas_01_lh.InnerSurf.vtk",
-      "inflated": "data/01/SparseAtlas_01_lh.InflateSurf.vtk",
-      "sphere": "data/01/SparseAtlas_01_lh.SphereSurf.vtk"
+      "outer": "data/1/SparseAtlas_01_lh.OuterSurf.vtk",
+      "middle": "data/1/SparseAtlas_01_lh.MiddleSurf.vtk",
+      "inner": "data/1/SparseAtlas_01_lh.InnerSurf.vtk",
+      "inflated": "data/1/SparseAtlas_01_lh.InflateSurf.vtk",
+      "sphere": "data/1/SparseAtlas_01_lh.SphereSurf.vtk"
     },
     "right": {
-      "outer": "data/01/SparseAtlas_01_rh.OuterSurf.vtk",
-      "middle": "data/01/SparseAtlas_01_rh.MiddleSurf.vtk",
-      "inner": "data/01/SparseAtlas_01_rh.InnerSurf.vtk",
-      "inflated": "data/01/SparseAtlas_01_rh.InflateSurf.vtk",
-      "sphere": "data/01/SparseAtlas_01_rh.SphereSurf.vtk"
-    }
-  },
-  "3": {
-    "left": {
-      "outer": "data/03/SparseAtlas_03_lh.OuterSurf.vtk",
-      "middle": "data/03/SparseAtlas_03_lh.MiddleSurf.vtk",
-      "inner": "data/03/SparseAtlas_03_lh.InnerSurf.vtk",
-      "inflated": "data/03/SparseAtlas_03_lh.InflateSurf.vtk",
-      "sphere": "data/03/SparseAtlas_03_lh.SphereSurf.vtk"
-    },
-    "right": {
-      "outer": "data/03/SparseAtlas_03_rh.OuterSurf.vtk",
-      "middle": "data/03/SparseAtlas_03_rh.MiddleSurf.vtk",
-      "inner": "data/03/SparseAtlas_03_rh.InnerSurf.vtk",
-      "inflated": "data/03/SparseAtlas_03_rh.InflateSurf.vtk",
-      "sphere": "data/03/SparseAtlas_03_rh.SphereSurf.vtk"
-    }
-  },
-  "6": {
-    "left": {
-      "outer": "data/06/SparseAtlas_06_lh.OuterSurf.vtk",
-      "middle": "data/06/SparseAtlas_06_lh.MiddleSurf.vtk",
-      "inner": "data/06/SparseAtlas_06_lh.InnerSurf.vtk",
-      "inflated": "data/06/SparseAtlas_06_lh.InflateSurf.vtk",
-      "sphere": "data/06/SparseAtlas_06_lh.SphereSurf.vtk"
-    },
-    "right": {
-      "outer": "data/06/SparseAtlas_06_rh.OuterSurf.vtk",
-      "middle": "data/06/SparseAtlas_06_rh.MiddleSurf.vtk",
-      "inner": "data/06/SparseAtlas_06_rh.InnerSurf.vtk",
-      "inflated": "data/06/SparseAtlas_06_rh.InflateSurf.vtk",
-      "sphere": "data/06/SparseAtlas_06_rh.SphereSurf.vtk"
-    }
-  },
-  "9": {
-    "left": {
-      "outer": "data/09/SparseAtlas_09_lh.OuterSurf.vtk",
-      "middle": "data/09/SparseAtlas_09_lh.MiddleSurf.vtk",
-      "inner": "data/09/SparseAtlas_09_lh.InnerSurf.vtk",
-      "inflated": "data/09/SparseAtlas_09_lh.InflateSurf.vtk",
-      "sphere": "data/09/SparseAtlas_09_lh.SphereSurf.vtk"
-    },
-    "right": {
-      "outer": "data/09/SparseAtlas_09_rh.OuterSurf.vtk",
-      "middle": "data/09/SparseAtlas_09_rh.MiddleSurf.vtk",
-      "inner": "data/09/SparseAtlas_09_rh.InnerSurf.vtk",
-      "inflated": "data/09/SparseAtlas_09_rh.InflateSurf.vtk",
-      "sphere": "data/09/SparseAtlas_09_rh.SphereSurf.vtk"
+      "outer": "data/1/SparseAtlas_01_rh.OuterSurf.vtk",
+      "middle": "data/1/SparseAtlas_01_rh.MiddleSurf.vtk",
+      "inner": "data/1/SparseAtlas_01_rh.InnerSurf.vtk",
+      "inflated": "data/1/SparseAtlas_01_rh.InflateSurf.vtk",
+      "sphere": "data/1/SparseAtlas_01_rh.SphereSurf.vtk"
     }
   },
   "12": {
@@ -111,6 +63,22 @@
       "sphere": "data/24/SparseAtlas_24_rh.SphereSurf.vtk"
     }
   },
+  "3": {
+    "left": {
+      "outer": "data/3/SparseAtlas_03_lh.OuterSurf.vtk",
+      "middle": "data/3/SparseAtlas_03_lh.MiddleSurf.vtk",
+      "inner": "data/3/SparseAtlas_03_lh.InnerSurf.vtk",
+      "inflated": "data/3/SparseAtlas_03_lh.InflateSurf.vtk",
+      "sphere": "data/3/SparseAtlas_03_lh.SphereSurf.vtk"
+    },
+    "right": {
+      "outer": "data/3/SparseAtlas_03_rh.OuterSurf.vtk",
+      "middle": "data/3/SparseAtlas_03_rh.MiddleSurf.vtk",
+      "inner": "data/3/SparseAtlas_03_rh.InnerSurf.vtk",
+      "inflated": "data/3/SparseAtlas_03_rh.InflateSurf.vtk",
+      "sphere": "data/3/SparseAtlas_03_rh.SphereSurf.vtk"
+    }
+  },
   "36": {
     "left": {
       "outer": "data/36/SparseAtlas_36_lh.OuterSurf.vtk",
@@ -143,6 +111,22 @@
       "sphere": "data/48/SparseAtlas_48_rh.SphereSurf.vtk"
     }
   },
+  "6": {
+    "left": {
+      "outer": "data/6/SparseAtlas_06_lh.OuterSurf.vtk",
+      "middle": "data/6/SparseAtlas_06_lh.MiddleSurf.vtk",
+      "inner": "data/6/SparseAtlas_06_lh.InnerSurf.vtk",
+      "inflated": "data/6/SparseAtlas_06_lh.InflateSurf.vtk",
+      "sphere": "data/6/SparseAtlas_06_lh.SphereSurf.vtk"
+    },
+    "right": {
+      "outer": "data/6/SparseAtlas_06_rh.OuterSurf.vtk",
+      "middle": "data/6/SparseAtlas_06_rh.MiddleSurf.vtk",
+      "inner": "data/6/SparseAtlas_06_rh.InnerSurf.vtk",
+      "inflated": "data/6/SparseAtlas_06_rh.InflateSurf.vtk",
+      "sphere": "data/6/SparseAtlas_06_rh.SphereSurf.vtk"
+    }
+  },
   "60": {
     "left": {
       "outer": "data/60/SparseAtlas_60_lh.OuterSurf.vtk",
@@ -173,6 +157,22 @@
       "inner": "data/72/SparseAtlas_72_rh.InnerSurf.vtk",
       "inflated": "data/72/SparseAtlas_72_rh.InflateSurf.vtk",
       "sphere": "data/72/SparseAtlas_72_rh.SphereSurf.vtk"
+    }
+  },
+  "9": {
+    "left": {
+      "outer": "data/9/SparseAtlas_09_lh.OuterSurf.vtk",
+      "middle": "data/9/SparseAtlas_09_lh.MiddleSurf.vtk",
+      "inner": "data/9/SparseAtlas_09_lh.InnerSurf.vtk",
+      "inflated": "data/9/SparseAtlas_09_lh.InflateSurf.vtk",
+      "sphere": "data/9/SparseAtlas_09_lh.SphereSurf.vtk"
+    },
+    "right": {
+      "outer": "data/9/SparseAtlas_09_rh.OuterSurf.vtk",
+      "middle": "data/9/SparseAtlas_09_rh.MiddleSurf.vtk",
+      "inner": "data/9/SparseAtlas_09_rh.InnerSurf.vtk",
+      "inflated": "data/9/SparseAtlas_09_rh.InflateSurf.vtk",
+      "sphere": "data/9/SparseAtlas_09_rh.SphereSurf.vtk"
     }
   }
 }

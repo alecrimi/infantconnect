@@ -33,7 +33,7 @@ MANIFEST = ROOT / "atlas.json"
 TRACT_DIR = ROOT / "tract_atlases"
 
 DISPLAY_MAX_AGE_MONTHS = 72
-MNE_SUBJECTS_DIR = Path.home() / "Documents" / "infant_viewer" / "mne_templates"
+MNE_SUBJECTS_DIR = ROOT / "mne_templates"
 
 INFANT_SCALP_TEMPLATES = {
     "0mo": 0, "3mo": 3, "6mo": 6, "9mo": 9,
@@ -1164,8 +1164,21 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
         if self.tract_cache or self.tract_load_errors:
             return
 
-        if not TRACT_DIR.is_dir():
-            self.tract_load_errors["_dir"] = f"missing {TRACT_DIR.name}/"
+        # Fetch the large tractography archive only when the user first enables
+        # "Show tractography". The installer skips subsequent downloads once the
+        # expected cluster_*.vtp files are present.
+        try:
+            from tract_setup import ensure_tract_atlas_ready
+            if not ensure_tract_atlas_ready(self):
+                return
+        except Exception as exc:
+            traceback.print_exc()
+            QMessageBox.critical(
+                self, "Tractography setup failed",
+                f"Could not download or prepare the NABA-800FC tractography atlas.\n\n"
+                f"{type(exc).__name__}: {exc}\n\n"
+                "Check your internet connection and try enabling Show tractography again.",
+            )
             return
 
         files = sorted(TRACT_DIR.glob("cluster_*.vtp"))
@@ -2199,6 +2212,11 @@ class InfantBrainViewer(BundleAnimationMixin, QMainWindow):
 def main():
     app = QApplication(sys.argv)
     try:
+        # First launch: fetch, extract and index the cortical atlas before the
+        # viewer reads atlas.json. Existing installations are checked and reused.
+        from atlas_setup import ensure_atlas_ready
+        if not ensure_atlas_ready():
+            return
         window = InfantBrainViewer()
         window.show()
         sys.exit(app.exec())

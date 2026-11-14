@@ -1,0 +1,264 @@
+{
+ "sources": {
+  "1": "neo",
+  "3": "neo",
+  "6": "neo",
+  "9": "1yr",
+  "12": "1yr",
+  "18": "1yr",
+  "24": "2yr",
+  "36": "2yr",
+  "48": "2yr",
+  "60": "2yr",
+  "72": "2yr"
+ },
+ "qc": {
+  "1_left": {
+   "n_vertices": 163842,
+   "direct_hit": 0.4916016650187376,
+   "fallback_mean_mm": 6.0702739089515605,
+   "unlabeled": 1116,
+   "n_labels": 37
+  },
+  "1_right": {
+   "n_vertices": 163842,
+   "direct_hit": 0.5167295321102038,
+   "fallback_mean_mm": 5.556825292372241,
+   "unlabeled": 50,
+   "n_labels": 37
+  },
+  "3_left": {
+   "n_vertices": 163842,
+   "direct_hit": 0.467041417951441,
+   "fallback_mean_mm": 6.527430676550588,
+   "unlabeled": 30,
+   "n_labels": 41
+  },
+  "3_right": {
+   "n_vertices": 163842,
+   "direct_hit": 0.5150693961255356,
+   "fallback_mean_mm": 6.041618495354114,
+   "unlabeled": 0,
+   "n_labels": 39
+  },
+  "6_left": {
+   "n_vertices": 163842,
+   "direct_hit": 0.43337483673295,
+   "fallback_mean_mm": 7.823267406677262,
+   "unlabeled": 2909,
+   "n_labels": 40
+  },
+  "6_right": {
+   "n_vertices": 163842,
+   "direct_hit": 0.48275167539458747,
+   "fallback_mean_mm": 7.128505323897793,
+   "unlabeled": 2008,
+   "n_labels": 40
+  },
+  "9_left": {
+   "n_vertices": 163842,
+   "direct_hit": 0.5988879530279171,
+   "fallback_mean_mm": 5.238912843025689,
+   "unlabeled": 0,
+   "n_labels": 39
+  },
+  "9_right": {
+   "n_vertices": 163842,
+   "direct_hit": 0.6063524615178038,
+   "fallback_mean_mm": 4.970409378690747,
+   "unlabeled": 0,
+   "n_labels": 37
+  },
+  "12_left": {
+   "n_vertices": 163842,
+   "direct_hit": 0.5965930591667582,
+   "fallback_mean_mm": 5.51471487783343,
+   "unlabeled": 0,
+   "n_labels": 39
+  },
+  "12_right": {
+   "n_vertices": 163842,
+   "direct_hit": 0.6021044664982117,
+   "fallback_mean_mm": 5.179317202425698,
+   "unlabeled": 0,
+   "n_labels": 37
+  },
+  "18_left": {
+   "n_vertices": 163842,
+   "direct_hit": 0.5857838649430549,
+   "fallback_mean_mm": 5.827834670331094,
+   "unlabeled": 3,
+   "n_labels": 39
+  },
+  "18_right": {
+   "n_vertices": 163842,
+   "direct_hit": 0.6004199167490631,
+   "fallback_mean_mm": 5.539474359368266,
+   "unlabeled": 0,
+   "n_labels": 37
+  },
+  "24_left": {
+   "n_vertices": 163842,
+   "direct_hit": 0.628892469574346,
+   "fallback_mean_mm": 5.269688466051324,
+   "unlabeled": 0,
+   "n_labels": 40
+  },
+  "24_right": {
+   "n_vertices": 163842,
+   "direct_hit": 0.601536846474042,
+   "fallback_mean_mm": 5.098568388723434,
+   "unlabeled": 0,
+   "n_labels": 37
+  },
+  "36_left": {
+   "n_vertices": 163842,
+   "direct_hit": 0.6157883814894838,
+   "fallback_mean_mm": 5.544527864858361,
+   "unlabeled": 16,
+   "n_labels": 40
+  },
+  "36_right": {
+   "n_vertices": 163842,
+   "direct_hit": 0.6014941223862014,
+   "fallback_mean_mm": 5.3842102901669655,
+   "unlabeled": 0,
+   "n_labels": 39
+  },
+  "48_left": {
+   "n_vertices": 163842,
+   "direct_hit": 0.6064867372224461,
+   "fallback_mean_mm": 5.854352493352977,
+   "unlabeled": 399,
+   "n_labels": 39
+  },
+  "48_right": {
+   "n_vertices": 163842,
+   "direct_hit": 0.593577959253427,
+   "fallback_mean_mm": 5.601263385081661,
+   "unlabeled": 81,
+   "n_labels": 40
+  },
+  "60_left": {
+   "n_vertices": 163842,
+   "direct_hit": 0.6008410541863503,
+   "fallback_mean_mm": 5.954761195460767,
+   "unlabeled": 436,
+   "n_labels": 40
+  },
+  "60_right": {
+   "n_vertices": 163842,
+   "direct_hit": 0.5959888184958679,
+   "fallback_mean_mm": 5.667676582097097,
+   "unlabeled": 37,
+   "n_labels": 39
+  },
+  "72_left": {
+   "n_vertices": 163842,
+   "direct_hit": 0.5989550908802382,
+   "fallback_mean_mm": 6.124134631475926,
+   "unlabeled": 733,
+   "n_labels": 41
+  },
+  "72_right": {
+   "n_vertices": 163842,
+   "direct_hit": 0.5905933765456964,
+   "fallback_mean_mm": 5.798828480809464,
+   "unlabeled": 352,
+   "n_labels": 39
+  }
+ },
+ "aal_names": {
+  "1": "PreCG-L",
+  "2": "PreCG-R",
+  "3": "SFGdor-L",
+  "4": "SFGdor-R",
+  "5": "ORBsup-L",
+  "6": "ORBsup-R",
+  "7": "MFG-L",
+  "8": "MFG-R",
+  "9": "ORBmid-L",
+  "10": "ORBmid-R",
+  "11": "IFGoperc-L",
+  "12": "IFGoperc-R",
+  "13": "IFGtriang-L",
+  "14": "IFGtriang-R",
+  "15": "ORBinf-L",
+  "16": "ORBinf-R",
+  "17": "ROL-L",
+  "18": "ROL-R",
+  "19": "SMA-L",
+  "20": "SMA-R",
+  "21": "OLF-L",
+  "22": "OLF-R",
+  "23": "SFGmed-L",
+  "24": "SFGmed-R",
+  "25": "ORBsupmed-L",
+  "26": "ORBsupmed-R",
+  "27": "REC-L",
+  "28": "REC-R",
+  "29": "INS-L",
+  "30": "INS-R",
+  "31": "ACG-L",
+  "32": "ACG-R",
+  "33": "DCG-L",
+  "34": "DCG-R",
+  "35": "PCG-L",
+  "36": "PCG-R",
+  "37": "HIP-L",
+  "38": "HIP-R",
+  "39": "PHG-L",
+  "40": "PHG-R",
+  "41": "AMYG-L",
+  "42": "AMYG-R",
+  "43": "CAL-L",
+  "44": "CAL-R",
+  "45": "CUN-L",
+  "46": "CUN-R",
+  "47": "LING-L",
+  "48": "LING-R",
+  "49": "SOG-L",
+  "50": "SOG-R",
+  "51": "MOG-L",
+  "52": "MOG-R",
+  "53": "IOG-L",
+  "54": "IOG-R",
+  "55": "FFG-L",
+  "56": "FFG-R",
+  "57": "PoCG-L",
+  "58": "PoCG-R",
+  "59": "SPG-L",
+  "60": "SPG-R",
+  "61": "IPL-L",
+  "62": "IPL-R",
+  "63": "SMG-L",
+  "64": "SMG-R",
+  "65": "ANG-L",
+  "66": "ANG-R",
+  "67": "PCUN-L",
+  "68": "PCUN-R",
+  "69": "PCL-L",
+  "70": "PCL-R",
+  "71": "CAU-L",
+  "72": "CAU-R",
+  "73": "PUT-L",
+  "74": "PUT-R",
+  "75": "PAL-L",
+  "76": "PAL-R",
+  "77": "THA-L",
+  "78": "THA-R",
+  "79": "HES-L",
+  "80": "HES-R",
+  "81": "STG-L",
+  "82": "STG-R",
+  "83": "TPOsup-L",
+  "84": "TPOsup-R",
+  "85": "MTG-L",
+  "86": "MTG-R",
+  "87": "TPOmid-L",
+  "88": "TPOmid-R",
+  "89": "ITG-L",
+  "90": "ITG-R"
+ },
+ "note": "Infant AAL labels are defined for 0, 1 and 2 years only; ages above 24 months reuse the 2-year labels (not age-matched)."
+}
