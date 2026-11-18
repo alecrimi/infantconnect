@@ -37,11 +37,10 @@ import pyvista as pv
 from scipy.spatial import cKDTree
 
 # Standard AAL90 abbreviations: odd index = left, even index = right.
-# Verify against Table 2 of the UNC release document before publishing.
 _AAL_BASE = [
     "PreCG", "SFGdor", "ORBsup", "MFG", "ORBmid", "IFGoperc", "IFGtriang",
-    "ORBinf", "ROL", "SMA", "OLF", "SFGmed", "ORBsupmed", "REC", "INS", "ACG",
-    "DCG", "PCG", "HIP", "PHG", "AMYG", "CAL", "CUN", "LING", "SOG", "MOG",
+    "ORBinf", "ROL", "SMA", "OLF", "SFGmed", "ORBmed", "REC", "INS", "ACG",
+    "MCG", "PCG", "HIP", "PHG", "AMYG", "CAL", "CUN", "LING", "SOG", "MOG",
     "IOG", "FFG", "PoCG", "SPG", "IPL", "SMG", "ANG", "PCUN", "PCL", "CAU",
     "PUT", "PAL", "THA", "HES", "STG", "TPOsup", "MTG", "TPOmid", "ITG",
 ]
