@@ -156,7 +156,7 @@ def sample_labels(points_mm, volume, affine, side, max_fallback_mm=8.0):
     lab[inside] = volume[tuple(ijk[inside].T)]
     valid = inside & (lab >= 0) & (lab <= 90)
     ok = valid & allowed[np.clip(lab, 0, 90)]
-    stats = {"direct_hit": float(ok.mean()), "fallback_mean_mm": 0.0, "unlabeled": 0}
+    stats = {"direct_hit": float(ok.mean()), "fallback_mean_mm": 0.0, "unlabeled": 0, "non_zero_labels_percentage": 0}
 
     bad = np.flatnonzero(~ok)
     if bad.size:
@@ -172,6 +172,7 @@ def sample_labels(points_mm, volume, affine, side, max_fallback_mm=8.0):
             lab[far] = 0
             stats["fallback_mean_mm"] = float(d.mean())
     stats["unlabeled"] = int((lab == 0).sum())
+    stats["non_zero_labels_percentage"] = 100 - (stats["unlabeled"] * 100 / len(lab))
     return lab, stats
 
 
@@ -204,9 +205,15 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
 
     volumes = {}
-    meta = {"sources": {}, "qc": {}, "aal_names": {str(k): v for k, v in AAL_NAMES.items()},
+    meta = {"sources": {}, "qc": {}, "qc_summary": {}, "aal_names": {str(k): v for k, v in AAL_NAMES.items()},
             "note": "Infant AAL labels are defined for 0, 1 and 2 years only; "
                     "ages above 24 months reuse the 2-year labels (not age-matched)."}
+
+    # Variables for qc summary
+    min_non_zero_labels_percentage = 100
+    max_non_zero_labels_percentage = 0
+    min_labeled_vertices = float("inf")
+    max_labeled_vertices = 0
 
     for age in sorted(int(a) for a in atlas):
         src = volume_for_age(age)
@@ -216,6 +223,7 @@ def main():
             print(f"loaded {path.name}: shape {volumes[src][0].shape}")
         vol, aff = volumes[src]
         meta["sources"][str(age)] = src
+
         for hemi in ("left", "right"):
             rel = atlas[str(age)].get(hemi, {}).get(args.surface)
             if not rel:
@@ -224,11 +232,24 @@ def main():
             pts = np.asarray(mesh.points, dtype=float) + np.asarray(args.shift)
             lab, st = sample_labels(pts, vol, aff, hemi, args.max_fallback_mm)
             np.save(out / f"infant_aal_{age:02d}_{hemi}.npy", lab)
-            meta["qc"][f"{age}_{hemi}"] = {"n_vertices": int(len(lab)), **st,
+            meta["qc"][f"{age}_{hemi}"] = {"n_vertices": int(len(lab)), "labeled_vertices": int(len(lab)) - st["unlabeled"], **st,
                                           "n_labels": int(len(np.unique(lab[lab > 0])))}
             flag = "  <-- LOW: check alignment" if st["direct_hit"] < 0.6 else ""
             print(f"age {age:>2} {hemi:<5} {src}  direct hit {st['direct_hit']*100:5.1f}%  "
                   f"fallback {st['fallback_mean_mm']:.2f} mm  unlabeled {st['unlabeled']}{flag}")
+
+            # Calculating qc summary
+            min_non_zero_labels_percentage = min(min_non_zero_labels_percentage, st["non_zero_labels_percentage"])
+            max_non_zero_labels_percentage = max(max_non_zero_labels_percentage, st["non_zero_labels_percentage"])
+            min_labeled_vertices = min(min_labeled_vertices, meta["qc"][f"{age}_{hemi}"]["labeled_vertices"])
+            max_labeled_vertices = max(max_labeled_vertices, meta["qc"][f"{age}_{hemi}"]["labeled_vertices"])
+
+    meta["qc_summary"] = {
+        "min_non_zero_labels_percentage": min_non_zero_labels_percentage,
+        "max_non_zero_labels_percentage": max_non_zero_labels_percentage,
+        "min_labeled_vertices": min_labeled_vertices,
+        "max_labeled_vertices": max_labeled_vertices
+    }
 
     (out / "infant_aal_meta.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
     print(f"wrote labels and infant_aal_meta.json to {out}")
