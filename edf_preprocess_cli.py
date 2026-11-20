@@ -187,7 +187,7 @@ def load_config(path):
             import tomli as tomllib
         cfg = tomllib.loads(text.decode("utf-8"))
     elif suffix == ".json":
-        cfg = json.loads(text.decode("utf-8"))
+        cfg = json.loads(text)
     else:
         raise ValueError(f"Unsupported config type '{suffix}' (use .json or .toml).")
     cfg = cfg.get("preprocess", cfg)         # allow an optional [preprocess] table
