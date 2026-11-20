@@ -21,6 +21,8 @@ from PySide6.QtWidgets import (
     QFileDialog, QPushButton, QRadioButton, QButtonGroup, QFrame, QSplitter,
 )
 
+import h5py
+
 from eeg_trace_panel import EEGTracePanel
 from effconn import compute_effective_connectivity
 from bundle_animation import BundleAnimationMixin
